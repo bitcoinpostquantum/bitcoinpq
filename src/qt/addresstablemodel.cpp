@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -28,10 +29,12 @@ struct AddressTableEntry
     Type type;
     QString label;
     QString address;
+	QString use_count;
 
     AddressTableEntry() {}
-    AddressTableEntry(Type _type, const QString &_label, const QString &_address):
-        type(_type), label(_label), address(_address) {}
+    AddressTableEntry(
+		Type _type, const QString &_label, const QString &_address, QString const & use_count):
+        type(_type), label(_label), address(_address), use_count(use_count) {}
 };
 
 struct AddressTableEntryLessThan
@@ -83,13 +86,23 @@ public:
             for (const std::pair<CTxDestination, CAddressBookData>& item : wallet->mapAddressBook)
             {
                 const CTxDestination& address = item.first;
+				
                 bool fMine = IsMine(*wallet, address);
+
+				auto use_count = wallet->GetKeyUseCount(address);
+				QString strUseCount = QString::number(use_count.first) + QString("/") + 
+						QString::number(use_count.second);
+
                 AddressTableEntry::Type addressType = translateTransactionType(
                         QString::fromStdString(item.second.purpose), fMine);
+
                 const std::string& strName = item.second.name;
-                cachedAddressTable.append(AddressTableEntry(addressType,
-                                  QString::fromStdString(strName),
-                                  QString::fromStdString(EncodeDestination(address))));
+				
+                cachedAddressTable.append(AddressTableEntry(
+					addressType, 
+					QString::fromStdString(strName),
+					QString::fromStdString(EncodeDestination(address)),
+					strUseCount));
             }
         }
         // qLowerBound() and qUpperBound() require our cachedAddressTable list to be sorted in asc order
@@ -98,7 +111,13 @@ public:
         qSort(cachedAddressTable.begin(), cachedAddressTable.end(), AddressTableEntryLessThan());
     }
 
-    void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status)
+    void updateEntry(
+		const QString &address, 
+		const QString &label, 
+		const QString &use_count, 
+		bool isMine, 
+		const QString &purpose, 
+		int status)
     {
         // Find address / label in model
         QList<AddressTableEntry>::iterator lower = qLowerBound(
@@ -119,7 +138,7 @@ public:
                 break;
             }
             parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex);
-            cachedAddressTable.insert(lowerIndex, AddressTableEntry(newEntryType, label, address));
+            cachedAddressTable.insert(lowerIndex, AddressTableEntry(newEntryType, label, address, use_count));
             parent->endInsertRows();
             break;
         case CT_UPDATED:
@@ -166,7 +185,7 @@ public:
 AddressTableModel::AddressTableModel(CWallet *_wallet, WalletModel *parent) :
     QAbstractTableModel(parent),walletModel(parent),wallet(_wallet),priv(0)
 {
-    columns << tr("Label") << tr("Address");
+    columns << tr("Label") << tr("Address") << tr("Use Count");
     priv = new AddressTablePriv(wallet, this);
     priv->refreshAddressTable();
 }
@@ -210,6 +229,9 @@ QVariant AddressTableModel::data(const QModelIndex &index, int role) const
             }
         case Address:
             return rec->address;
+
+		case UseCount:
+            return rec->use_count;
         }
     }
     else if (role == Qt::FontRole)
@@ -334,11 +356,15 @@ QModelIndex AddressTableModel::index(int row, int column, const QModelIndex &par
     }
 }
 
-void AddressTableModel::updateEntry(const QString &address,
-        const QString &label, bool isMine, const QString &purpose, int status)
+void AddressTableModel::updateEntry(
+	const QString &address,
+    const QString &label, 
+	bool isMine, const QString &purpose, int status)
 {
+	QString strUseCount = walletModel->getAddressUseCountString(address);
+	
     // Update address book model from Bitcoin core
-    priv->updateEntry(address, label, isMine, purpose, status);
+    priv->updateEntry(address, label, strUseCount, isMine, purpose, status);
 }
 
 QString AddressTableModel::addRow(const QString &type, const QString &label, const QString &address, const OutputType address_type)
@@ -369,7 +395,7 @@ QString AddressTableModel::addRow(const QString &type, const QString &label, con
     {
         // Generate a new address to associate with given label
         CPubKey newKey;
-        if(!wallet->GetKeyFromPool(newKey))
+        if(!wallet->GetNewKey(newKey, KeyTypeFromOutputType(g_address_type)))
         {
             WalletModel::UnlockContext ctx(walletModel->requestUnlock());
             if(!ctx.isValid())
@@ -378,7 +404,7 @@ QString AddressTableModel::addRow(const QString &type, const QString &label, con
                 editStatus = WALLET_UNLOCK_FAILURE;
                 return QString();
             }
-            if(!wallet->GetKeyFromPool(newKey))
+            if(!wallet->GetNewKey(newKey, KeyTypeFromOutputType(g_address_type)))
             {
                 editStatus = KEY_GENERATION_FAILURE;
                 return QString();

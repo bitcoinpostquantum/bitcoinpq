@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -56,7 +57,21 @@ bool CWalletDB::EraseTx(uint256 hash)
     return EraseIC(std::make_pair(std::string("tx"), hash));
 }
 
-bool CWalletDB::WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata& keyMeta)
+bool CWalletDB::WriteKeyUseCount(const CPubKey& vchPubKey, uint64_t use_count)
+{
+    if (!WriteIC(std::make_pair(std::string("keyuses"), vchPubKey), use_count, true)) 
+	{
+		LogPrintf("%s: write 'keyuses' %d - failed\n", __func__, use_count);
+        return false;
+    }
+	LogPrintf("%s: write 'keyuses' %d - ok\n", __func__, use_count);
+	return true;
+}
+
+bool CWalletDB::WriteKey(
+	const CPubKey& vchPubKey, 
+	const CPrivKey& vchPrivKey, 
+	const CKeyMetadata& keyMeta)
 {
     if (!WriteIC(std::make_pair(std::string("keymeta"), vchPubKey), keyMeta, false)) {
         return false;
@@ -67,13 +82,19 @@ bool CWalletDB::WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, c
     vchKey.reserve(vchPubKey.size() + vchPrivKey.size());
     vchKey.insert(vchKey.end(), vchPubKey.begin(), vchPubKey.end());
     vchKey.insert(vchKey.end(), vchPrivKey.begin(), vchPrivKey.end());
-
-    return WriteIC(std::make_pair(std::string("key"), vchPubKey), std::make_pair(vchPrivKey, Hash(vchKey.begin(), vchKey.end())), false);
+	
+	if (!WriteIC(std::make_pair(std::string("key"), vchPubKey), std::make_pair(vchPrivKey, Hash(vchKey.begin(), vchKey.end())), false))
+		return false;
+	
+	LogPrintf("%s: write 'key' size: %d - ok\n", __func__, vchPrivKey.size());
+	
+    return true;
 }
 
-bool CWalletDB::WriteCryptedKey(const CPubKey& vchPubKey,
-                                const std::vector<unsigned char>& vchCryptedSecret,
-                                const CKeyMetadata &keyMeta)
+bool CWalletDB::WriteCryptedKey(
+	const CPubKey& vchPubKey,
+	const std::vector<unsigned char>& vchCryptedSecret,
+	const CKeyMetadata &keyMeta)
 {
     if (!WriteIC(std::make_pair(std::string("keymeta"), vchPubKey), keyMeta)) {
         return false;
@@ -84,6 +105,7 @@ bool CWalletDB::WriteCryptedKey(const CPubKey& vchPubKey,
     }
     EraseIC(std::make_pair(std::string("key"), vchPubKey));
     EraseIC(std::make_pair(std::string("wkey"), vchPubKey));
+	
     return true;
 }
 
@@ -347,6 +369,8 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 pkey = wkey.vchPrivKey;
             }
 
+			LogPrintf("%s: Key: privkey size: %d\n", __func__, pkey.size());
+			
             // Old wallets store keys as "key" [pubkey] => [privkey]
             // ... which was slow for wallets with lots of keys, because the public key is re-derived from the private key
             // using EC operations as a checksum.
@@ -430,7 +454,17 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             CKeyMetadata keyMeta;
             ssValue >> keyMeta;
             wss.nKeyMeta++;
-            pwallet->LoadKeyMetadata(vchPubKey.GetID(), keyMeta);
+		
+			pwallet->LoadKeyMetadata(vchPubKey.GetID(), keyMeta);
+        }
+        else if (strType == "keyuses")
+        {
+            CPubKey vchPubKey;
+            ssKey >> vchPubKey;
+            uint64_t use_count;
+            ssValue >> use_count;
+		
+			pwallet->LoadKeyUseCount(vchPubKey.GetID(), use_count);
         }
         else if (strType == "watchmeta")
         {
@@ -439,7 +473,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             CKeyMetadata keyMeta;
             ssValue >> keyMeta;
             wss.nKeyMeta++;
-            pwallet->LoadScriptMetadata(CScriptID(script), keyMeta);
+            pwallet->LoadScriptMetadata(CScriptID(script, -1), keyMeta);
         }
         else if (strType == "defaultkey")
         {

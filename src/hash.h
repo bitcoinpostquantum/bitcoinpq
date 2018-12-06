@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -96,6 +97,20 @@ inline uint160 Hash160(const T1 pbegin, const T1 pend)
     uint160 result;
     CHash160().Write(pbegin == pend ? pblank : (const unsigned char*)&pbegin[0], (pend - pbegin) * sizeof(pbegin[0]))
               .Finalize((unsigned char*)&result);
+    return result;
+}
+
+template<typename T1>
+inline uint160 Hash160v1(const T1 pbegin, const T1 pend)
+{
+    size_t size = pend - pbegin; 
+    auto hash = bpqcrypto::hash256_shake128(&pbegin[0], size);
+
+    uint160 result;
+    
+    CRIPEMD160 hasher;
+    hasher.Write(hash.data(), hash.size()).Finalize((unsigned char*)&result);
+
     return result;
 }
 

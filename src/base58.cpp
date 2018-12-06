@@ -1,4 +1,5 @@
-// Copyright (c) 2014-2017 The Bitcoin Core developers
+// Copyright (c) 2014-2018 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -221,6 +222,7 @@ private:
     const CChainParams& m_params;
 
 public:
+	
     DestinationEncoder(const CChainParams& params) : m_params(params) {}
 
     std::string operator()(const CKeyID& id) const
@@ -241,14 +243,21 @@ public:
     {
         std::vector<unsigned char> data = {0};
         ConvertBits<8, 5, true>(data, id.begin(), id.end());
-        return bech32::Encode(m_params.Bech32HRP(), data);
+		return bech32::Encode(m_params.Bech32HRP_Bitcoin(), data);
     }
 
     std::string operator()(const WitnessV0ScriptHash& id) const
     {
         std::vector<unsigned char> data = {0};
         ConvertBits<8, 5, true>(data, id.begin(), id.end());
-        return bech32::Encode(m_params.Bech32HRP(), data);
+		return bech32::Encode(m_params.Bech32HRP_Bitcoin(), data);
+    }
+
+    std::string operator()(const WitnessV1ScriptHash& id) const
+    {
+        std::vector<unsigned char> data = {1};
+        ConvertBits<8, 5, true>(data, id.begin(), id.end());
+        return bech32::Encode(m_params.Bech32HRP_BPQ(), data);
     }
 
     std::string operator()(const WitnessUnknown& id) const
@@ -256,9 +265,13 @@ public:
         if (id.version < 1 || id.version > 16 || id.length < 2 || id.length > 40) {
             return {};
         }
+
         std::vector<unsigned char> data = {(unsigned char)id.version};
         ConvertBits<8, 5, true>(data, id.program, id.program + id.length);
-        return bech32::Encode(m_params.Bech32HRP(), data);
+		if (id.version == 1)
+	        return bech32::Encode(m_params.Bech32HRP_BPQ(), data);
+        else
+			return bech32::Encode(m_params.Bech32HRP_Bitcoin(), data);
     }
 
     std::string operator()(const CNoDestination& no) const { return {}; }
@@ -268,82 +281,140 @@ CTxDestination DecodeDestination(const std::string& str, const CChainParams& par
 {
     std::vector<unsigned char> data;
     uint160 hash;
-    if (DecodeBase58Check(str, data)) {
+    if (DecodeBase58Check(str, data)) 
+	{
         // base58-encoded Bitcoin addresses.
         // Public-key-hash-addresses have version 0 (or 111 testnet).
         // The data vector contains RIPEMD160(SHA256(pubkey)), where pubkey is the serialized public key.
         const std::vector<unsigned char>& pubkey_prefix = params.Base58Prefix(CChainParams::PUBKEY_ADDRESS);
         if (data.size() == hash.size() + pubkey_prefix.size() && std::equal(pubkey_prefix.begin(), pubkey_prefix.end(), data.begin())) {
             std::copy(data.begin() + pubkey_prefix.size(), data.end(), hash.begin());
-            return CKeyID(hash);
+            return CTxDestination{CKeyID(hash)};
         }
+		
         // Script-hash-addresses have version 5 (or 196 testnet).
         // The data vector contains RIPEMD160(SHA256(cscript)), where cscript is the serialized redemption script.
         const std::vector<unsigned char>& script_prefix = params.Base58Prefix(CChainParams::SCRIPT_ADDRESS);
         if (data.size() == hash.size() + script_prefix.size() && std::equal(script_prefix.begin(), script_prefix.end(), data.begin())) {
             std::copy(data.begin() + script_prefix.size(), data.end(), hash.begin());
-            return CScriptID(hash);
+            return CTxDestination{CScriptID(hash)};
         }
     }
     data.clear();
     auto bech = bech32::Decode(str);
-    if (bech.second.size() > 0 && bech.first == params.Bech32HRP()) {
+	
+    if (bech.second.size() > 0 && bech.first == params.Bech32HRP_Bitcoin()) 
+	{
         // Bech32 decoding
         int version = bech.second[0]; // The first 5 bit symbol is the witness version (0-16)
+        
         // The rest of the symbols are converted witness program bytes.
-        if (ConvertBits<5, 8, false>(data, bech.second.begin() + 1, bech.second.end())) {
-            if (version == 0) {
+        if (ConvertBits<5, 8, false>(data, bech.second.begin() + 1, bech.second.end())) 
+        {
+            if (version == 0) 
+            {
                 {
                     WitnessV0KeyHash keyid;
                     if (data.size() == keyid.size()) {
                         std::copy(data.begin(), data.end(), keyid.begin());
-                        return keyid;
+                        return CTxDestination{keyid};
                     }
                 }
                 {
                     WitnessV0ScriptHash scriptid;
                     if (data.size() == scriptid.size()) {
                         std::copy(data.begin(), data.end(), scriptid.begin());
-                        return scriptid;
+                        return CTxDestination{scriptid};
                     }
                 }
-                return CNoDestination();
+                return CTxDestination{CNoDestination()};
             }
+            
             if (version > 16 || data.size() < 2 || data.size() > 40) {
-                return CNoDestination();
+                return CTxDestination(CNoDestination());
             }
+            
             WitnessUnknown unk;
             unk.version = version;
             std::copy(data.begin(), data.end(), unk.program);
             unk.length = data.size();
-            return unk;
+            return CTxDestination(unk);
         }
     }
-    return CNoDestination();
+    else if (bech.second.size() > 0 && bech.first == params.Bech32HRP_BPQ()) 
+    {
+        int version = bech.second[0]; // The first 5 bit symbol is the witness version (0-16)
+        if (ConvertBits<5, 8, false>(data, bech.second.begin() + 1, bech.second.end())) 
+        {
+            if (version == 1) 
+            {
+                WitnessV1ScriptHash scriptid;
+                if (data.size() == scriptid.size()) {
+                    std::copy(data.begin(), data.end(), scriptid.begin());
+                    return CTxDestination{scriptid};
+                }
+                return CTxDestination{CNoDestination()};
+            }
+            
+            if (version > 16 || data.size() < 2 || data.size() > 40) {
+                return CTxDestination(CNoDestination());
+            }
+            
+            WitnessUnknown unk;
+            unk.version = version;
+            std::copy(data.begin(), data.end(), unk.program);
+            unk.length = data.size();
+            return CTxDestination(unk);
+        }
+    }
+        
+    return CTxDestination{CNoDestination()};
 }
+
 } // namespace
 
 void CBitcoinSecret::SetKey(const CKey& vchSecret)
 {
     assert(vchSecret.IsValid());
-    SetData(Params().Base58Prefix(CChainParams::SECRET_KEY), vchSecret.begin(), vchSecret.size());
-    if (vchSecret.IsCompressed())
-        vchData.push_back(1);
+	
+	auto raw = vchSecret.raw_short_key();
+	SetData(Params().Base58Prefix(CChainParams::SECRET_KEY), 
+		raw.data(), raw.data() + raw.size());
 }
 
 CKey CBitcoinSecret::GetKey()
 {
     CKey ret;
-    assert(vchData.size() >= 32);
-    ret.Set(vchData.begin(), vchData.begin() + 32, vchData.size() > 32 && vchData[32] == 1);
-    return ret;
+	
+    if (vchVersion == Params().Base58Prefix(CChainParams::SECRET_KEY))
+	{
+		ret.Set(vchData.data(), vchData.size());
+	}
+	
+	return ret;
+}
+
+bool CBitcoinSecret::IsBitcoinSecret() const
+{
+	if (vchData.size() == 0)
+		return false;
+	
+	bool fExpectedFormat = bpqcrypto::is_ecdsa_key(vchData.data(), vchData.size());
+	bool fCorrectVersion = vchVersion == Params().Base58Prefix(CChainParams::SECRET_KEY);
+	return fExpectedFormat && fCorrectVersion;
 }
 
 bool CBitcoinSecret::IsValid() const
 {
-    bool fExpectedFormat = vchData.size() == 32 || (vchData.size() == 33 && vchData[32] == 1);
-    bool fCorrectVersion = vchVersion == Params().Base58Prefix(CChainParams::SECRET_KEY);
-    return fExpectedFormat && fCorrectVersion;
+	if (vchData.size() == 0)
+		return false;
+
+	bool fExpectedFormat = 
+		bpqcrypto::is_xmss_key(vchData.data(), vchData.size()) || 
+		bpqcrypto::is_xmss_short_key(vchData.data(), vchData.size()) || 
+		bpqcrypto::is_ecdsa_key(vchData.data(), vchData.size());
+	bool fCorrectVersion = vchVersion == Params().Base58Prefix(CChainParams::SECRET_KEY);
+	return fExpectedFormat && fCorrectVersion;
 }
 
 bool CBitcoinSecret::SetString(const char* pszSecret)

@@ -56,6 +56,22 @@ void TestSHA256(const std::string &in, const std::string &hexout) { TestVector(C
 void TestSHA512(const std::string &in, const std::string &hexout) { TestVector(CSHA512(), in, ParseHex(hexout));}
 void TestRIPEMD160(const std::string &in, const std::string &hexout) { TestVector(CRIPEMD160(), in, ParseHex(hexout));}
 
+void TestBpqSHA256(const std::string &in, const std::string &hexout) 
+{ 
+    auto hash = bpqcrypto::hash_sha256((uint8_t*)in.data(), in.size());
+    auto out = ParseHex(hexout);
+    bool res = hash.size() == out.size() && std::equal(hash.begin(), hash.end(), out.begin());
+    BOOST_CHECK(res);    
+}
+
+void TestBpqSHAKE128(const std::string &in, const std::string &hexout) 
+{ 
+    auto hash = bpqcrypto::hash256_shake128((uint8_t*)in.data(), in.size());
+    auto out = ParseHex(hexout);
+    bool res = hash.size() == out.size() && std::equal(hash.begin(), hash.end(), out.begin());
+    BOOST_CHECK(res);    
+}
+
 void TestHMACSHA256(const std::string &hexkey, const std::string &hexin, const std::string &hexout) {
     std::vector<unsigned char> key = ParseHex(hexkey);
     TestVector(CHMAC_SHA256(key.data(), key.size()), ParseHex(hexin), ParseHex(hexout));

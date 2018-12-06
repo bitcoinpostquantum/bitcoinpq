@@ -123,6 +123,50 @@ Result CreateTransaction(const CWallet* wallet, const uint256& txid, const CCoin
             nOutput = i;
         }
     }
+
+    if (nOutput == -1) {
+
+        // try found a change as Mine && back.
+
+        for (size_t i = 0; i< wtx.tx->vin.size(); ++i)
+        {
+            auto & txin = wtx.tx->vin[i];
+
+            auto it = wallet->mapWallet.find(txin.prevout.hash);
+            if (it == wallet->mapWallet.end() || txin.prevout.n >= it->second.tx->vout.size())
+                continue;
+
+            auto & prev_out = it->second.tx->vout[txin.prevout.n];
+
+            for (size_t j = 0; j < wtx.tx->vout.size(); ++j)
+            {
+                auto & txout = wtx.tx->vout[j];
+                if (txout.scriptPubKey == prev_out.scriptPubKey && wallet->IsMine(txout))
+                {
+                    if (nOutput != -1) {
+                        errors.push_back("Transaction has multiple change outputs");
+                        return Result::WALLET_ERROR;
+                    }
+                    nOutput = i;
+                }
+            }
+        }
+    }
+
+    if (nOutput == -1) {
+        // try found a change as Mine.
+        for (size_t i = 0; i < wtx.tx->vout.size(); ++i) {
+            if (wallet->IsMine(wtx.tx->vout[i])) {
+                if (nOutput != -1) {
+                    errors.push_back("Transaction has multiple change outputs");
+                    return Result::WALLET_ERROR;
+                }
+                nOutput = i;
+            }
+        }
+    }
+
+
     if (nOutput == -1) {
         errors.push_back("Transaction does not have a change output");
         return Result::WALLET_ERROR;

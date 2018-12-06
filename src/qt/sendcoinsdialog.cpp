@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -215,7 +216,7 @@ void SendCoinsDialog::on_sendButton_clicked()
 {
     if(!model || !model->getOptionsModel())
         return;
-
+	
     QList<SendCoinsRecipient> recipients;
     bool valid = true;
 
@@ -259,7 +260,7 @@ void SendCoinsDialog::on_sendButton_clicked()
         ctrl = *CoinControlDialog::coinControl();
 
     updateCoinControlState(ctrl);
-
+    
     prepareStatus = model->prepareTransaction(currentTransaction, ctrl);
 
     // process prepareStatus and on error generate message shown to user

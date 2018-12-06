@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Name=BPQ Core
+Comment=Connect to the BPQ P2P Network
+Comment[de]=Verbinde mit dem BPQ peer-to-peer Netzwerk
+Comment[fr]=BPQ, monnaie virtuelle cryptographique pair à pair
+Comment[tr]=BPQ, eşten eşe kriptografik sanal para birimi
+Exec=bpq-qt %u
+Terminal=false
+Type=Application
+Icon=bpq128
+MimeType=x-scheme-handler/bpq;
+Categories=Office;Finance;
+StartupWMClass=BPQ-Qt

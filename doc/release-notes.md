@@ -2,8 +2,8 @@ Bitcoin Core version 0.16.x is now available from:
 
   <https://bitcoincore.org/bin/bitcoin-core-0.16.x/>
 
-This is a new minor version release, with various bugfixes
-as well as updated translations.
+This is a new major version release, including new features, various bugfixes
+and performance improvements, as well as updated translations.
 
 Please report bugs using the issue tracker at GitHub:
 
@@ -49,22 +49,21 @@ frequently tested on them.
 Notable changes
 ===============
 
-(to be filled in)
+Example item
+-------------
+
+Example item for a notable change.
 
 0.16.x change log
 ------------------
 
-(to be filled in)
+(to be filled in at release time)
 
 Credits
 =======
 
 Thanks to everyone who directly contributed to this release:
 
-(to be filled in)
-
-And to those that reported security issues:
-
-(to be filled in)
+(to be filled in at release time)
 
 As well as everyone that helped translating on [Transifex](https://www.transifex.com/projects/p/bitcoin/).

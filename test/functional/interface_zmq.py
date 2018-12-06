@@ -45,14 +45,14 @@ class ZMQTest (BitcoinTestFramework):
         except ImportError:
             raise SkipTest("python3-zmq module not available.")
 
-        # Check that bitcoin has been built with ZMQ enabled.
+        # Check that bpq has been built with ZMQ enabled.
         config = configparser.ConfigParser()
         if not self.options.configfile:
             self.options.configfile = os.path.abspath(os.path.join(os.path.dirname(__file__), "../config.ini"))
         config.read_file(open(self.options.configfile))
 
         if not config["components"].getboolean("ENABLE_ZMQ"):
-            raise SkipTest("bitcoind has not been built with zmq enabled.")
+            raise SkipTest("bpqd has not been built with zmq enabled.")
 
         # Initialize ZMQ context and socket.
         # All messages are received in the same socket which means

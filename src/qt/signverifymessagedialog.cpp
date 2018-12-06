@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -123,14 +124,7 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
         ui->statusLabel_SM->setText(tr("The entered address is invalid.") + QString(" ") + tr("Please check the address and try again."));
         return;
     }
-    const CKeyID* keyID = boost::get<CKeyID>(&destination);
-    if (!keyID) {
-        ui->addressIn_SM->setValid(false);
-        ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
-        ui->statusLabel_SM->setText(tr("The entered address does not refer to a key.") + QString(" ") + tr("Please check the address and try again."));
-        return;
-    }
-
+    
     WalletModel::UnlockContext ctx(model->requestUnlock());
     if (!ctx.isValid())
     {
@@ -140,23 +134,60 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
     }
 
     CKey key;
-    if (!model->getPrivKey(*keyID, key))
+
+    const CKeyID *keyID = boost::get<CKeyID>(&destination);
+    if (keyID) 
     {
-        ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
-        ui->statusLabel_SM->setText(tr("Private key for the entered address is not available."));
-        return;
+        if (!model->getPrivKey(*keyID, key)) {
+            ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
+            ui->statusLabel_SM->setText(tr("Private key for the entered address is not available."));
+            return;
+        }
     }
-
-    CHashWriter ss(SER_GETHASH, 0);
-    ss << strMessageMagic;
-    ss << ui->messageIn_SM->document()->toPlainText().toStdString();
-
-    std::vector<unsigned char> vchSig;
-    if (!key.SignCompact(ss.GetHash(), vchSig))
+    else
     {
-        ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
-        ui->statusLabel_SM->setText(QString("<nobr>") + tr("Message signing failed.") + QString("</nobr>"));
-        return;
+        if (!IsDestinationBPQ(destination))
+        {
+            ui->addressIn_SM->setValid(false);
+            ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
+            ui->statusLabel_SM->setText(tr("The entered address does not refer to a key.") + QString(" ") + tr("Please check the address and try again."));
+            return;
+        }
+        
+        if (!model->getPrivKey(destination, key)) {
+            ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
+            ui->statusLabel_SM->setText(tr("Private key not available."));
+            return;
+        }
+    }
+    
+    std::vector<unsigned char> vchSig;
+    
+    if (key.IsXMSS())
+    {
+        CDataStream ss(SER_GETHASH, 0);
+        ss << strMessageMagic;
+        ss << ui->messageIn_SM->document()->toPlainText().toStdString();
+
+        if (!key.SignCompact(ss.str(), vchSig))
+        {
+            ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
+            ui->statusLabel_SM->setText(QString("<nobr>") + tr("Message signing failed.") + QString("</nobr>"));
+            return;
+        }
+    }
+    else
+    {
+        CHashWriter ss(SER_GETHASH, 0);
+        ss << strMessageMagic;
+        ss << ui->messageIn_SM->document()->toPlainText().toStdString();
+
+        if (!key.SignCompact(ss.GetHash(), vchSig))
+        {
+            ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
+            ui->statusLabel_SM->setText(QString("<nobr>") + tr("Message signing failed.") + QString("</nobr>"));
+            return;
+        }
     }
 
     ui->statusLabel_SM->setStyleSheet("QLabel { color: green; }");
@@ -201,12 +232,6 @@ void SignVerifyMessageDialog::on_verifyMessageButton_VM_clicked()
         ui->statusLabel_VM->setText(tr("The entered address is invalid.") + QString(" ") + tr("Please check the address and try again."));
         return;
     }
-    if (!boost::get<CKeyID>(&destination)) {
-        ui->addressIn_VM->setValid(false);
-        ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
-        ui->statusLabel_VM->setText(tr("The entered address does not refer to a key.") + QString(" ") + tr("Please check the address and try again."));
-        return;
-    }
 
     bool fInvalid = false;
     std::vector<unsigned char> vchSig = DecodeBase64(ui->signatureIn_VM->text().toStdString().c_str(), &fInvalid);
@@ -218,26 +243,54 @@ void SignVerifyMessageDialog::on_verifyMessageButton_VM_clicked()
         ui->statusLabel_VM->setText(tr("The signature could not be decoded.") + QString(" ") + tr("Please check the signature and try again."));
         return;
     }
+    
+    bool fRecoverOk = false;
+    bool fCompareOk = false;
+    
+    if (IsDestinationBPQ(destination))
+    {
+        CDataStream ss(SER_GETHASH, 0);
+        ss << strMessageMagic;
+        ss << ui->messageIn_VM->document()->toPlainText().toStdString();
 
-    CHashWriter ss(SER_GETHASH, 0);
-    ss << strMessageMagic;
-    ss << ui->messageIn_VM->document()->toPlainText().toStdString();
+        CPubKey pubkey;
+        fRecoverOk = pubkey.RecoverCompact(ss.str(), vchSig);
+        fCompareOk = fRecoverOk && GetScriptForDestination(destination) == GetScriptForDestination(WitnessV1ScriptHash(GetScriptForRawPubKey(pubkey)));
+    }
+    else
+    {
+        const CKeyID *keyID = boost::get<CKeyID>(&destination);
+        if (!keyID) {
+            ui->addressIn_VM->setValid(false);
+            ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
+            ui->statusLabel_VM->setText(tr("The entered address does not refer to a key.") + QString(" ") + tr("Please check the address and try again."));
+            return;
+        }
 
-    CPubKey pubkey;
-    if (!pubkey.RecoverCompact(ss.GetHash(), vchSig))
+        CHashWriter ss(SER_GETHASH, 0);
+        ss << strMessageMagic;
+        ss << ui->messageIn_VM->document()->toPlainText().toStdString();
+
+        CPubKey pubkey;
+        fRecoverOk = pubkey.RecoverCompact(ss.GetHash(), vchSig);
+        fCompareOk = fRecoverOk && CTxDestination(pubkey.GetID()) == destination;
+    }
+    
+    if (!fRecoverOk)
     {
         ui->signatureIn_VM->setValid(false);
         ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_VM->setText(tr("The signature did not match the message digest.") + QString(" ") + tr("Please check the signature and try again."));
         return;
     }
-
-    if (!(CTxDestination(pubkey.GetID()) == destination)) {
+    
+    if (!fCompareOk)
+    {
         ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_VM->setText(QString("<nobr>") + tr("Message verification failed.") + QString("</nobr>"));
         return;
     }
-
+    
     ui->statusLabel_VM->setStyleSheet("QLabel { color: green; }");
     ui->statusLabel_VM->setText(QString("<nobr>") + tr("Message verified.") + QString("</nobr>"));
 }

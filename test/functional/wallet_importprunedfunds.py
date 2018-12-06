@@ -10,6 +10,10 @@ class ImportPrunedFundsTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 2
+        self.extra_args = [
+            ["-addresstype=legacy"], 
+            ["-addresstype=legacy"],
+        ]
 
     def run_test(self):
         self.log.info("Mining blocks...")

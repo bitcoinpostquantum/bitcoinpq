@@ -1,4 +1,5 @@
 // Copyright (c) 2015-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +14,7 @@
 #include <scheduler.h>
 #include <txdb.h>
 #include <txmempool.h>
+#include <wallet/wallet.h>
 
 #include <memory>
 
@@ -78,6 +80,13 @@ class CScript;
 // 100-block REGTEST-mode block chain
 //
 struct TestChain100Setup : public TestingSetup {
+	
+	static const CKeyType chainKeyType = CKeyType::ECDSA_COMPRESSED;
+	//static const CKeyType chainKeyType = CKeyType::XMSS_512_H10;
+	//static const CKeyType chainKeyType = CKeyType::XMSS_512_H16;
+    
+    static const OutputType OUTPUT_TYPE_DEFAULT = OUTPUT_TYPE_P2SH_SEGWIT;
+	
     TestChain100Setup();
 
     // Create a new block with just given transactions, coinbase paying to
@@ -119,8 +128,5 @@ struct TestMemPoolEntryHelper
 };
 
 CBlock getBlock13b8a();
-
-// define an implicit conversion here so that uint256 may be used directly in BOOST_CHECK_*
-std::ostream& operator<<(std::ostream& os, const uint256& num);
 
 #endif

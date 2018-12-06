@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -52,17 +53,40 @@ extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& 
 /* Calculate the difficulty for a given block index,
  * or the block index of the given chain.
  */
-double GetDifficulty(const CChain& chain, const CBlockIndex* blockindex)
+double GetDifficultyINTERNAL(const CBlockIndex* blockindex)
 {
-    if (blockindex == nullptr)
+    // Floating point number that is a multiple of the minimum difficulty,
+    // minimum difficulty = 1.0.
+
+    uint32_t bits = blockindex->nBits;
+
+    uint32_t powLimit =
+        UintToArith256(Params().GetConsensus().powLimit).GetCompact();
+    int nShift = (bits >> 24) & 0xff;
+    int nShiftAmount = (powLimit >> 24) & 0xff;
+
+    double dDiff =
+        (double)(powLimit & 0x00ffffff) / 
+        (double)(bits & 0x00ffffff);
+
+    while (nShift < nShiftAmount)
     {
-        if (chain.Tip() == nullptr)
-            return 1.0;
-        else
-            blockindex = chain.Tip();
+        dDiff *= 256.0;
+        nShift++;
+    }
+    while (nShift > nShiftAmount)
+    {
+        dDiff /= 256.0;
+        nShift--;
     }
 
+    return dDiff;
+}
+
+double GetDifficultyBitcoin(const CBlockIndex* blockindex)
+{
     int nShift = (blockindex->nBits >> 24) & 0xff;
+
     double dDiff =
         (double)0x0000ffff / (double)(blockindex->nBits & 0x00ffffff);
 
@@ -80,10 +104,31 @@ double GetDifficulty(const CChain& chain, const CBlockIndex* blockindex)
     return dDiff;
 }
 
+double GetDifficulty(const CChain& chain, const CBlockIndex* blockindex)
+{
+    if (blockindex == nullptr)
+    {
+        if (chain.Tip() == nullptr)
+            return 1.0;
+        else
+            blockindex = chain.Tip();
+    }
+
+    if (blockindex->nHeight >= Params().GetConsensus().BPQHeight)
+    {
+        return GetDifficultyINTERNAL(blockindex);
+    }
+    else
+    {
+        return GetDifficultyBitcoin(blockindex);
+    }
+}
+
 double GetDifficulty(const CBlockIndex* blockindex)
 {
     return GetDifficulty(chainActive, blockindex);
 }
+
 
 UniValue blockheaderToJSON(const CBlockIndex* blockindex)
 {
@@ -96,12 +141,16 @@ UniValue blockheaderToJSON(const CBlockIndex* blockindex)
         confirmations = chainActive.Height() - blockindex->nHeight + 1;
     result.push_back(Pair("confirmations", confirmations));
     result.push_back(Pair("height", blockindex->nHeight));
-    result.push_back(Pair("version", blockindex->nVersion));
-    result.push_back(Pair("versionHex", strprintf("%08x", blockindex->nVersion)));
+    result.push_back(Pair("majorversion", (int)blockindex->nMajorVersion));
+    result.push_back(Pair("version", blockindex->nMinorVersion));
+    result.push_back(Pair("versionHex", strprintf("%08x", blockindex->nMinorVersion)));
     result.push_back(Pair("merkleroot", blockindex->hashMerkleRoot.GetHex()));
+    result.push_back(Pair("witnessmerkleroot", blockindex->hashWitnessMerkleRoot.GetHex()));
     result.push_back(Pair("time", (int64_t)blockindex->nTime));
     result.push_back(Pair("mediantime", (int64_t)blockindex->GetMedianTimePast()));
-    result.push_back(Pair("nonce", (uint64_t)blockindex->nNonce));
+    result.push_back(Pair("nonceUint32", (uint64_t)((uint32_t)blockindex->nNonce.GetUint64(0))));
+    result.push_back(Pair("nonce", blockindex->nNonce.GetHex()));
+    result.push_back(Pair("solution", HexStr(blockindex->nSolution)));
     result.push_back(Pair("bits", strprintf("%08x", blockindex->nBits)));
     result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
     result.push_back(Pair("chainwork", blockindex->nChainWork.GetHex()));
@@ -124,14 +173,19 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     // Only report confirmations if the block is on the main chain
     if (chainActive.Contains(blockindex))
         confirmations = chainActive.Height() - blockindex->nHeight + 1;
+    
     result.push_back(Pair("confirmations", confirmations));
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+
     result.push_back(Pair("strippedsize", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS)));
     result.push_back(Pair("size", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION)));
-    result.push_back(Pair("weight", (int)::GetBlockWeight(block)));
+    result.push_back(Pair("weight", (int)::GetBlockWeight(block, consensusParams)));
     result.push_back(Pair("height", blockindex->nHeight));
-    result.push_back(Pair("version", block.nVersion));
-    result.push_back(Pair("versionHex", strprintf("%08x", block.nVersion)));
+    result.push_back(Pair("majorversion", (int)block.nMajorVersion));
+    result.push_back(Pair("version", block.nMinorVersion));
+    result.push_back(Pair("versionHex", strprintf("%08x", block.nMinorVersion)));
     result.push_back(Pair("merkleroot", block.hashMerkleRoot.GetHex()));
+    result.push_back(Pair("witnessmerkleroot", block.hashWitnessMerkleRoot.GetHex()));
     UniValue txs(UniValue::VARR);
     for(const auto& tx : block.vtx)
     {
@@ -147,7 +201,9 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     result.push_back(Pair("tx", txs));
     result.push_back(Pair("time", block.GetBlockTime()));
     result.push_back(Pair("mediantime", (int64_t)blockindex->GetMedianTimePast()));
-    result.push_back(Pair("nonce", (uint64_t)block.nNonce));
+    result.push_back(Pair("nonceUint32", (uint64_t)((uint32_t)block.nNonce.GetUint64(0))));
+    result.push_back(Pair("nonce", block.nNonce.GetHex()));
+    result.push_back(Pair("solution", HexStr(block.nSolution)));
     result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
     result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
     result.push_back(Pair("chainwork", blockindex->nChainWork.GetHex()));
@@ -939,9 +995,9 @@ UniValue gettxoutsetinfo(const JSONRPCRequest& request)
             "\nResult:\n"
             "{\n"
             "  \"height\":n,     (numeric) The current block height (index)\n"
-            "  \"bestblock\": \"hex\",   (string) The hash of the block at the tip of the chain\n"
-            "  \"transactions\": n,      (numeric) The number of transactions with unspent outputs\n"
-            "  \"txouts\": n,            (numeric) The number of unspent transaction outputs\n"
+            "  \"bestblock\": \"hex\",   (string) the best block hash hex\n"
+            "  \"transactions\": n,      (numeric) The number of transactions\n"
+            "  \"txouts\": n,            (numeric) The number of output transactions\n"
             "  \"bogosize\": n,          (numeric) A meaningless metric for UTXO set size\n"
             "  \"hash_serialized_2\": \"hash\", (string) The serialized hash\n"
             "  \"disk_size\": n,         (numeric) The estimated size of the chainstate on disk\n"
@@ -984,7 +1040,7 @@ UniValue gettxout(const JSONRPCRequest& request)
             "     Note that an unspent output that is spent in the mempool won't appear.\n"
             "\nResult:\n"
             "{\n"
-            "  \"bestblock\":  \"hash\",    (string) The hash of the block at the tip of the chain\n"
+            "  \"bestblock\" : \"hash\",    (string) the block hash\n"
             "  \"confirmations\" : n,       (numeric) The number of confirmations\n"
             "  \"value\" : x.xxx,           (numeric) The transaction value in " + CURRENCY_UNIT + "\n"
             "  \"scriptPubKey\" : {         (json object)\n"

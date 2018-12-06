@@ -1,0 +1,33 @@
+# /etc/conf.d/bitcoind: config file for /etc/init.d/bpqd
+
+# Config file location
+#BPQD_CONFIGFILE="/etc/bpq/bpq.conf"
+
+# What directory to write pidfile to?  (created and owned by $BPQD_USER)
+#BPQD_PIDDIR="/var/run/bpqd"
+
+# What filename to give the pidfile
+#BPQD_PIDFILE="${BPQD_PIDDIR}/bpqd.pid"
+
+# Where to write bpqd data (be mindful that the blockchain is large)
+#BPQD_DATADIR="/var/lib/bpqd"
+
+# User and group to own bpqd process
+#BPQD_USER="bpq"
+#BPQD_GROUP="bpq"
+
+# Path to bpqd executable
+#BPQD_BIN="/usr/bin/bpqd"
+
+# Nice value to run bpqd under
+#BPQD_NICE=0
+
+# Additional options (avoid -conf and -datadir, use flags above)
+#BPQD_OPTS=""
+
+# The timeout in seconds OpenRC will wait for bpqd to terminate
+# after a SIGTERM has been raised.
+# Note that this will be mapped as argument to start-stop-daemon's
+# '--retry' option, which means you can specify a retry schedule
+# here. For more information see man 8 start-stop-daemon.
+BPQD_SIGTERM_TIMEOUT=60

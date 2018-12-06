@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -94,11 +95,15 @@ void ReceiveCoinsDialog::setModel(WalletModel *_model)
         // Last 2 columns are set by the columnResizingFixer, when the table geometry is ready.
         columnResizingFixer = new GUIUtil::TableViewLastColumnResizingFixer(tableView, AMOUNT_MINIMUM_COLUMN_WIDTH, DATE_COLUMN_WIDTH, this);
 
-        if (model->getDefaultAddressType() == OUTPUT_TYPE_BECH32) {
+        // configure bech32 checkbox, disable if launched with legacy as default:
+        if (model->getDefaultAddressType() == OUTPUT_TYPE_BECH32 ||
+                model->getDefaultAddressType() == OUTPUT_TYPE_BECH32_V1) {
             ui->useBech32->setCheckState(Qt::Checked);
         } else {
             ui->useBech32->setCheckState(Qt::Unchecked);
         }
+
+        ui->useBech32->setVisible( model->getDefaultAddressType() != OUTPUT_TYPE_BECH32_V1 );
     }
 }
 
@@ -141,14 +146,9 @@ void ReceiveCoinsDialog::on_receiveButton_clicked()
     QString address;
     QString label = ui->reqLabel->text();
     /* Generate new receiving address */
-    OutputType address_type;
-    if (ui->useBech32->isChecked()) {
-        address_type = OUTPUT_TYPE_BECH32;
-    } else {
-        address_type = model->getDefaultAddressType();
-        if (address_type == OUTPUT_TYPE_BECH32) {
-            address_type = OUTPUT_TYPE_P2SH_SEGWIT;
-        }
+    OutputType address_type = model->getDefaultAddressType();
+    if ( address_type != OUTPUT_TYPE_BECH32_V1 ) {
+        address_type = OUTPUT_TYPE_BECH32_V1;
     }
     address = model->getAddressTableModel()->addRow(AddressTableModel::Receive, label, "", address_type);
     SendCoinsRecipient info(address, label,

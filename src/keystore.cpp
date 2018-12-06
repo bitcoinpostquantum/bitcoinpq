@@ -1,11 +1,14 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <keystore.h>
 
 #include <util.h>
+
+#include "base58.h"
 
 bool CKeyStore::AddKey(const CKey &key) {
     return AddKeyPubKey(key, key.GetPubKey());
@@ -28,11 +31,22 @@ void CBasicKeyStore::ImplicitlyLearnRelatedKeyScripts(const CPubKey& pubkey)
     // "Implicitly" refers to fact that scripts are derived automatically from
     // existing keys, and are present in memory, even without being explicitly
     // loaded (e.g. from a file).
-    if (pubkey.IsCompressed()) {
-        CScript script = GetScriptForDestination(WitnessV0KeyHash(key_id));
-        // This does not use AddCScript, as it may be overridden.
-        CScriptID id(script);
-        mapScripts[id] = std::move(script);
+    
+    if (pubkey.IsXMSS())
+    {
+        CScript reedemscript = GetScriptForRawPubKey(pubkey);
+        CScript script = GetScriptForDestination(WitnessV1ScriptHash(reedemscript));
+        
+        mapScripts[CScriptID(reedemscript, 1)] = std::move(reedemscript);
+        mapScripts[CScriptID(script, 1)] = std::move(script);
+        
+    } else
+    {
+        if (is_key_segwit_useable(pubkey)) {
+            CScript script = GetScriptForDestination(WitnessV0KeyHash(key_id));
+            // This does not use AddCScript, as it may be overridden.
+            mapScripts[CScriptID(script, 0)] = std::move(script);
+        }
     }
 }
 
@@ -82,18 +96,91 @@ bool CBasicKeyStore::GetKey(const CKeyID &address, CKey &keyOut) const
     KeyMap::const_iterator mi = mapKeys.find(address);
     if (mi != mapKeys.end()) {
         keyOut = mi->second;
+		keyOut.AssignKeyStore(const_cast<CBasicKeyStore*>(this));
         return true;
     }
     return false;
 }
 
-bool CBasicKeyStore::AddCScript(const CScript& redeemScript)
+std::pair<size_t,size_t> CBasicKeyStore::GetKeyUseCount(const CTxDestination &dest) const
+{
+    LOCK(cs_KeyStore);
+	
+	CKeyID address = GetKeyForDestination(*this, dest);
+	if (address.IsNull())
+		return {0,0};
+	
+	auto it = mapKeyUseCount.find(address);
+	if ( it == mapKeyUseCount.end())
+		return {0,0};
+	
+	CPubKey pubkey;
+	if (!GetPubKey(address, pubkey))
+	{
+	    LogPrintf("%s: !!! pubkey for keyid not found, db storage corrupted\n", __func__);
+		return std::make_pair(it->second,0);
+	}
+	
+	if (pubkey.IsXMSS())
+	{
+		return std::make_pair(it->second, pubkey.GetMaxUseCount());
+	}
+
+	return std::make_pair(it->second,0);
+}
+
+uint64_t CBasicKeyStore::GetKeyUseCount(const CKeyID &address) const
+{
+    LOCK(cs_KeyStore);
+
+	auto it = mapKeyUseCount.find(address);
+	if ( it != mapKeyUseCount.end())
+		return it->second;
+
+	return 0;
+}
+
+uint64_t CBasicKeyStore::GetKeyUseCountInc(const CKeyID &address)
+{
+    LOCK(cs_KeyStore);
+
+	auto it = mapKeyUseCount.find(address);
+	if ( it != mapKeyUseCount.end())
+	{
+		return it->second++;
+	}
+
+	return 0;
+}
+
+bool CBasicKeyStore::SetKeyUseCount(const CKeyID &address, uint64_t use_count)
+{
+    LOCK(cs_KeyStore);
+
+	auto & iref = mapKeyUseCount[address];
+	
+	if (use_count <= iref)
+	{
+	    LogPrintf("%s: %u -> %u, skip\n", __func__, iref, use_count);
+		return false;
+	}
+	
+    LogPrintf("%s: %u -> %u\n", __func__, iref, use_count);
+	
+	iref = use_count;
+	
+	// TODO: set dirty to update database, 
+	
+	return true;
+}
+
+bool CBasicKeyStore::AddCScript(const CScript& redeemScript, int version)
 {
     if (redeemScript.size() > MAX_SCRIPT_ELEMENT_SIZE)
         return error("CBasicKeyStore::AddCScript(): redeemScripts > %i bytes are invalid", MAX_SCRIPT_ELEMENT_SIZE);
 
     LOCK(cs_KeyStore);
-    mapScripts[CScriptID(redeemScript)] = redeemScript;
+    mapScripts[CScriptID(redeemScript, version)] = redeemScript;
     return true;
 }
 
@@ -125,23 +212,7 @@ bool CBasicKeyStore::GetCScript(const CScriptID &hash, CScript& redeemScriptOut)
     return false;
 }
 
-static bool ExtractPubKey(const CScript &dest, CPubKey& pubKeyOut)
-{
-    //TODO: Use Solver to extract this?
-    CScript::const_iterator pc = dest.begin();
-    opcodetype opcode;
-    std::vector<unsigned char> vch;
-    if (!dest.GetOp(pc, opcode, vch) || vch.size() < 33 || vch.size() > 65)
-        return false;
-    pubKeyOut = CPubKey(vch);
-    if (!pubKeyOut.IsFullyValid())
-        return false;
-    if (!dest.GetOp(pc, opcode, vch) || opcode != OP_CHECKSIG || dest.GetOp(pc, opcode, vch))
-        return false;
-    return true;
-}
-
-bool CBasicKeyStore::AddWatchOnly(const CScript &dest)
+bool CBasicKeyStore::AddWatchOnly(const CScript &dest, int version)
 {
     LOCK(cs_KeyStore);
     setWatchOnly.insert(dest);
@@ -197,5 +268,26 @@ CKeyID GetKeyForDestination(const CKeyStore& store, const CTxDestination& dest)
             }
         }
     }
+    
+    if (auto witness_id = boost::get<WitnessV0ScriptHash>(&dest)) {
+        CScriptID script_id(*witness_id);
+        CScript script;
+        CPubKey pubKey;
+        if (store.GetCScript(script_id, script) && ExtractPubKey(script, pubKey))
+        {
+            return pubKey.GetID();
+        }
+    }
+    
+    if (auto witness_id = boost::get<WitnessV1ScriptHash>(&dest)) {
+        CScriptID script_id(*witness_id);
+        CScript script;
+        CPubKey pubKey;
+        if (store.GetCScript(script_id, script) && ExtractPubKey(script, pubKey))
+        {
+            return pubKey.GetID();
+        }
+    }
+    
     return CKeyID();
 }

@@ -1,9 +1,11 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <script/script.h>
+#include <crypto/sha256.h>
 
 #include <tinyformat.h>
 #include <utilstrencodings.h>
@@ -211,9 +213,10 @@ bool CScript::IsPayToScriptHash() const
 bool CScript::IsPayToWitnessScriptHash() const
 {
     // Extra-fast test for pay-to-witness-script-hash CScripts:
-    return (this->size() == 34 &&
-            (*this)[0] == OP_0 &&
-            (*this)[1] == 0x20);
+    if (this->size() != 34)
+        return false;
+    return  ((*this)[0] == OP_0 && (*this)[1] == 0x20) || 
+            ((*this)[0] == OP_1 && (*this)[1] == 0x20);
 }
 
 // A witness program is any valid CScript that consists of a 1-byte push opcode
@@ -263,7 +266,7 @@ std::string CScriptWitness::ToString() const
         if (i) {
             ret += ", ";
         }
-        ret += HexStr(stack[i]);
+        ret += ShortStr(HexStr(stack[i]), 128);
     }
     return ret + ")";
 }
@@ -279,4 +282,19 @@ bool CScript::HasValidOps() const
         }
     }
     return true;
+}
+
+uint256 CScript::Hash_SHA256() const
+{
+    uint256 scriptHash;
+
+    CSHA256().Write(&begin()[0], size())
+        .Finalize(scriptHash.begin());
+    
+    return scriptHash;
+}
+
+uint256 CScript::Hash_SHAKE128() const
+{
+    return uint256(bpqcrypto::hash256_shake128(&begin()[0], size()));
 }

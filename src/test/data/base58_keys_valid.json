@@ -486,12 +486,13 @@
         }
     ],
     [
-        "bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7k7grplx",
-        "5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6",
+        "pq1pt46tru44uppsewhzhz98a9qvnqefkz5hjvdagu6rsvj6k67x7mdqjs6gdx",
+        "51205d74b1f2b5e0430cbae2b88a7e940c98329b0a97931bd473438325ab6bc6f6da",
         {
             "isPrivkey": false,
             "chain": "main",
-            "tryCaseFlip": true
+            "tryCaseFlip": true,
+            "reedemScript" : "45100700000770d7540872d438c885b4789030b294f8d745a50a751aebfdda980d6df155f474300bd3efc6b6aeaa3cb585eff0604c3cd0b64b4b8ce227253c79e810a4d7372dac"
         }
     ],
     [
@@ -528,6 +529,52 @@
             "isPrivkey": false,
             "chain": "regtest",
             "tryCaseFlip": true
+        }
+    ],
+
+    [
+        "3Q9Xy2HFk3f7HgdbbN6jCScdQQeSfYsJsj2AZiujVCCZFACvKVTu5LgHVreVGJkGPfbv4WHJpjtQwTMpYr26HfBpUZXjGfZqhvHBe9uRZW6CD8nPfJXu1coKkvTw8hi6DUBvtoN6AZAu4KCZqZcs1YRMUpaMQiJEoQeXR5BHmrmYqwLfupWVxceXTC3KiuNdeDLcvGqz",
+        "10010000016d294078745a5daa3d3d9a2e658d903b05eff19743397e06ef0ee419c9c9bb0b3bb2583c49212e185243f7e9415bd3bc44113b4ee1b66e65dd2b28b299a74c3000000000000000006fbda6eec50d7b11c942f99b0c83767ab0e68fa5a747bc683b95d26d4b206d2a8ed7f1a9b776129bd51f1e260d51de439ab5f8e79b0ccd93852d5f2bdfffdb01",
+        {
+			"isXMSS": true,
+            "isPrivkey": true,
+            "chain": "main"
+        }
+    ],
+    [
+        "3Q9Xy2HFjiyKpxMQDbKXvYMZspsBf7Hvfe2FniZqxGp3aANCLziucycXchLMowB8qEWXHvc5pQRWkD21dGAfvVvUxxW58Kg7bBccYxd6JWEX7TeoEBMDBktCE6bYACRS62ut44GkPR3j2eQU3BfGb3V5KEkfV3tQpYjuNFBAEGQW2ZwAnzRX51ydLjP492yw1gCuREEP",
+        "1001000001475cc0e246dabca106fcc7de92c89b67f0c600f5e8ff82fb46f26d8a4c86502184f2725b87de31334dc94c0a76344dcc2fc9118a63e1eab259cbd8c36011f2fd0000000000000000d95f1c7bb7c35d4cb2b5170c52c524b5d68b227224eeb2e693ea9f01dcffceb5440c2537ca9cc3abc43451739227742f6f777f0e84e752156173c39a80ba3871",
+        {
+			"isXMSS": true,
+            "isPrivkey": true,
+            "chain": "main"
+        }
+    ],
+    [
+        "25rBW9uY3A69129eJqWPxnaYU7UxMXgr6FUqAxcvinXVLcKbD1XKnx7kDCPkfVRzY3HdFhGqfAXh8c7KFiQHpA5kEMkfvwWozcoE5ZmSiumwy3Twd8mLRqwmR9aX3ZQHsYDnoAWmLgwjdzRwc8LKRD2Rka9QhiSPopHqJJS8aVyK4eLtPyEacQLwMwvwVSy7Rwd1rUFRvLvC5pTJ1z87snhCb9ymXy1HjBucSdQhEE8VALBnB7jeaQdz8z2gU3yx4NCSUnpmsnBJMpREZfM8yFdhwWyuRHwsUcxbbbJUvrDKgwp2gc8h5RGtMXLCXhw5wQzJxuoMoubR1NZHDzjdDqAkyWMVjPq5STQQntGLoD29gukWbTv5v5E",
+        "10040000041fbc5c165084cf9bd6cee5e8016ca89e5c27a49474ffde09f5bc45eaa392a3ab230f806e5e55a25bd41167a6dc9d7a6be3c201e6aca1d4d6953636249066477f51164514680c0ee228a6f17306368fe1a3fc1014445c7079fb4dfe9e0c2a70327e2c3fc177732dbc1509418d43579f5580ca6a88417adacf0067f5ac08f538f900000000000000007d434105028d15a9a327832726fe1a0d384c44bcc44e17e707bb87d0fb04285b31d415f1837f1a7ae50c5e0647bfc2430a71fbfaaeb5f67c7a9ae6c25939fc225678cb07d8ee084e1c6afa99570ea846390f50b7400d3649552257b12f9a3dfec8ce352a4fdfd1e550cf0d5a71f0ba563e0e574c3fc9aceb7d507bc7a41ec7e8",
+        {
+			"isXMSS": true,
+            "isPrivkey": true,
+            "chain": "main"
+        }
+    ],
+    [
+        "25rBW9uY3Decde7CWUj5PMeHnezYgVYJjJ7NoD82ozJEWJ2ZzZbpJGhzbpQAYucjVALVmZcUEvghxi6oUU5x2nmotfCtfhmD4mbWVmMqojpdBrAMKBz9eA4AgK1Gwi7dvJmPTTgctS1en2qujTtF7EH1FU1nXnxmM3UL82Ut4BdTb8q63cPXUqEFDZov8gVEvYwEpJsV1PzQh9QzHcxC2FNBTu9XWRkWtRxupRxANeZRChCUxYeB6kkJkfaMhFuyvZeaVYpZvoFUtpe67Z6kBbrKVeVWhjGPF6BX5fDN1Z96cyvV4nkP94EoupwZzyPEQ2yRqCNgQ7Mi5mDS9gUF54En6SKxFA7p6uhCv27h823GrHB3m5uZyPm",
+        "10040000042fadf2f71ae09ed07125751bd90bba049cdbb082056fd0bb2504417f30a1ce7e75e242a2ee50af22c2c813cbcf8fe34e7da9cf906c334e6cb6e2ef59ad2f2611f1bfc72d47df2dbef54c9093606b810c5a8626811a358e6f79ac98100ead27c0bfcfedb81f534c8fec50577b9b754804599c9e221d0d37c74dd99acea3d8414d0000000000000000907740b099f5d21a45bc800ac4eaf24199fe8e5b59e301cbe626808f8a087f39f398d1cab199f7ea1e2262d24b73c7e38b03103f18e765e5cfd578c2f7049a8409dd295d3d060355bac7dd9c2a6f2d11b3743cc7094e8cee09b0e61b23c2d0bcbe95a1940f1bdf2bee96ce9e8619b14ae4ec85ce016c9c8d27c990f537dc1bd4",
+        {
+			"isXMSS": true,
+            "isPrivkey": true,
+            "chain": "main"
+        }
+    ],
+    [
+        "5UknSmr5ZYzCegz9dXm4qL1SwrjATp4Nk1ce2pJAT7KrMLqKrVmJDaTjtYkmkso91eyvuzkXRwEvKNBx7VBYRJPejEyyLHjUYpefVobPD5mtmufR91SKDcWEDqxggX346fsKYgka1HCFporJ7csd38ek6qwQjfyptSzKqJ8BWKcf39hrpNoiZZEvDbAkynEuFsXWzZvi",
+        "10010000016d294078745a5daa3d3d9a2e658d903b05eff19743397e06ef0ee419c9c9bb0b3bb2583c49212e185243f7e9415bd3bc44113b4ee1b66e65dd2b28b299a74c3000000000000000006fbda6eec50d7b11c942f99b0c83767ab0e68fa5a747bc683b95d26d4b206d2a8ed7f1a9b776129bd51f1e260d51de439ab5f8e79b0ccd93852d5f2bdfffdb01",
+        {
+			"isXMSS": true,
+            "isPrivkey": true,
+            "chain": "test"
         }
     ]
 ]

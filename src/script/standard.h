@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -18,13 +19,23 @@ static const bool DEFAULT_ACCEPT_DATACARRIER = true;
 class CKeyID;
 class CScript;
 
-/** A reference to a CScript: the Hash160 of its serialization (see script.h) */
+struct WitnessV0ScriptHash;
+struct WitnessV1ScriptHash;
+
+/** A reference to a CScript: the Hash160 of its serialization (see script.h) for legacy script
+ * RIPEMD160(SHAKE128) for WitnessV1 redeem script
+ */
 class CScriptID : public uint160
 {
 public:
     CScriptID() : uint160() {}
-    CScriptID(const CScript& in);
     CScriptID(const uint160& in) : uint160(in) {}
+    // version 0: RIPEMD160(SHA256(script))
+    // version 1: RIPEMD160(SHAKE128(script))
+    // -1 : default to version 1
+    CScriptID(const CScript& in, int version);
+    CScriptID(const WitnessV0ScriptHash& in);
+    CScriptID(const WitnessV1ScriptHash& in);
 };
 
 /**
@@ -64,6 +75,7 @@ enum txnouttype
     TX_NULL_DATA, //!< unspendable OP_RETURN script that carries data
     TX_WITNESS_V0_SCRIPTHASH,
     TX_WITNESS_V0_KEYHASH,
+    TX_WITNESS_V1_SCRIPTHASH,
     TX_WITNESS_UNKNOWN, //!< Only for Witness versions not already defined above
 };
 
@@ -77,14 +89,27 @@ struct WitnessV0ScriptHash : public uint256
 {
     WitnessV0ScriptHash() : uint256() {}
     explicit WitnessV0ScriptHash(const uint256& hash) : uint256(hash) {}
+    explicit WitnessV0ScriptHash(const CScript& script);
+    
     using uint256::uint256;
 };
 
+// P2WSH destination. SHA256 from script
 struct WitnessV0KeyHash : public uint160
 {
     WitnessV0KeyHash() : uint160() {}
     explicit WitnessV0KeyHash(const uint160& hash) : uint160(hash) {}
     using uint160::uint160;
+};
+
+// P2W1SH destination. hash256-SHAKE128 from script
+struct WitnessV1ScriptHash : public uint256
+{
+    WitnessV1ScriptHash() : uint256() {}
+    explicit WitnessV1ScriptHash(const uint256& hash) : uint256(hash) {}
+    explicit WitnessV1ScriptHash(const CScript& script);
+    
+    using uint256::uint256;
 };
 
 //! CTxDestination subtype to encode any future Witness version
@@ -112,14 +137,20 @@ struct WitnessUnknown
 /**
  * A txout script template with a specific destination. It is either:
  *  * CNoDestination: no destination set
- *  * CKeyID: TX_PUBKEYHASH destination (P2PKH)
- *  * CScriptID: TX_SCRIPTHASH destination (P2SH)
+ *  * CKeyIDv0: TX_PUBKEYHASH destination (P2PKH)
+ *  * CScriptIDv0: TX_SCRIPTHASH destination (P2SH)
  *  * WitnessV0ScriptHash: TX_WITNESS_V0_SCRIPTHASH destination (P2WSH)
  *  * WitnessV0KeyHash: TX_WITNESS_V0_KEYHASH destination (P2WPKH)
  *  * WitnessUnknown: TX_WITNESS_UNKNOWN destination (P2W???)
  *  A CTxDestination is the internal data type encoded in a bitcoin address
  */
-typedef boost::variant<CNoDestination, CKeyID, CScriptID, WitnessV0ScriptHash, WitnessV0KeyHash, WitnessUnknown> CTxDestination;
+typedef boost::variant<CNoDestination, 
+        CKeyID, CScriptID, 
+        WitnessV0ScriptHash, WitnessV0KeyHash, 
+        WitnessV1ScriptHash,
+        WitnessUnknown> CTxDestination;
+
+bool IsDestinationBPQ(CTxDestination const &dest);
 
 /** Check whether a CTxDestination is a CNoDestination. */
 bool IsValidDestination(const CTxDestination& dest);
@@ -149,6 +180,11 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::v
 bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet);
 
 /**
+ * Parse a standard scriptPubKey for the pubKey
+ */
+bool ExtractPubKey(const CScript& scriptPubKey, CPubKey& pubKey);
+
+/**
  * Parse a standard scriptPubKey with one or more destination addresses. For
  * multisig scripts, this populates the addressRet vector with the pubkey IDs
  * and nRequiredRet with the n required to spend. For other destinations,
@@ -164,7 +200,7 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::
 
 /**
  * Generate a Bitcoin scriptPubKey for the given CTxDestination. Returns a P2PKH
- * script for a CKeyID destination, a P2SH script for a CScriptID, and an empty
+ * script for a CKeyIDv0 destination, a P2SH script for a CScriptIDv0, and an empty
  * script for CNoDestination.
  */
 CScript GetScriptForDestination(const CTxDestination& dest);
@@ -184,5 +220,13 @@ CScript GetScriptForMultisig(int nRequired, const std::vector<CPubKey>& keys);
  * the various witness-specific CTxDestination subtypes.
  */
 CScript GetScriptForWitness(const CScript& redeemscript);
+
+/**
+ * Tryes to detect version of reedeem script:
+ * 0 - this is legacy script
+ * 1 - this is BPQ script
+ * -1 - unknown
+ */
+int DetectScriptVersion(const CScript& redeemscript);
 
 #endif // BITCOIN_SCRIPT_STANDARD_H

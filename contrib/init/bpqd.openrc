@@ -1,0 +1,93 @@
+
+#!/sbin/openrc-run
+
+# backward compatibility for existing gentoo layout 
+#
+if [ -d "/var/lib/bpq/.bpq" ]; then
+	BPQD_DEFAULT_DATADIR="/var/lib/bpq/.bpq"
+else
+	BPQD_DEFAULT_DATADIR="/var/lib/bpqd"
+fi
+
+BPQD_CONFIGFILE=${BPQD_CONFIGFILE:-/etc/bpq/bpq.conf}
+BPQD_PIDDIR=${BPQD_PIDDIR:-/var/run/bpqd}
+BPQD_PIDFILE=${BPQD_PIDFILE:-${BPQD_PIDDIR}/bpqd.pid}
+BPQD_DATADIR=${BPQD_DATADIR:-${BPQD_DEFAULT_DATADIR}}
+BPQD_USER=${BPQD_USER:-${BPQ_USER:-bpq}}
+BPQD_GROUP=${BPQD_GROUP:-bpq}
+BPQD_BIN=${BPQD_BIN:-/usr/bin/bpqd}
+BPQD_NICE=${BPQD_NICE:-${NICELEVEL:-0}}
+BPQD_OPTS="${BPQD_OPTS:-${BOQ_OPTS}}"
+
+name="BPQ Core Daemon"
+description="BPQ cryptocurrency P2P network daemon"
+
+command="/usr/bin/bpqd"
+command_args="-pid=\"${BPQD_PIDFILE}\" \
+		-conf=\"${BPQD_CONFIGFILE}\" \
+		-datadir=\"${BPQD_DATADIR}\" \
+		-daemon \
+		${BPQD_OPTS}"
+
+required_files="${BPQD_CONFIGFILE}"
+start_stop_daemon_args="-u ${BPQD_USER} \
+			-N ${BPQD_NICE} -w 2000"
+pidfile="${BPQD_PIDFILE}"
+
+# The retry schedule to use when stopping the daemon. Could be either
+# a timeout in seconds or multiple signal/timeout pairs (like
+# "SIGKILL/180 SIGTERM/300")
+retry="${BPQD_SIGTERM_TIMEOUT}"
+
+depend() {
+	need localmount net
+}
+
+# verify
+# 1) that the datadir exists and is writable (or create it)
+# 2) that a directory for the pid exists and is writable
+# 3) ownership and permissions on the config file
+start_pre() {
+	checkpath \
+	-d \
+	--mode 0750 \
+	--owner "${BPQD_USER}:${BPQD_GROUP}" \
+	"${BPQD_DATADIR}"
+
+	checkpath \
+	-d \
+	--mode 0755 \
+	--owner "${BPQD_USER}:${BPQD_GROUP}" \
+	"${BPQD_PIDDIR}"
+
+	checkpath -f \
+	-o ${BPQD_USER}:${BPQD_GROUP} \
+	-m 0660 \
+	${BPQD_CONFIGFILE}
+
+	checkconfig || return 1
+}
+
+checkconfig()
+{
+	if ! grep -qs '^rpcpassword=' "${BPQD_CONFIGFILE}" ; then
+		eerror ""
+		eerror "ERROR: You must set a secure rpcpassword to run bpqd."
+		eerror "The setting must appear in ${BPQD_CONFIGFILE}"
+		eerror ""
+		eerror "This password is security critical to securing wallets "
+		eerror "and must not be the same as the rpcuser setting."
+		eerror "You can generate a suitable random password using the following "
+		eerror "command from the shell:"
+		eerror ""
+		eerror "bash -c 'tr -dc a-zA-Z0-9 < /dev/urandom | head -c32 && echo'"
+		eerror ""
+		eerror "It is recommended that you also set alertnotify so you are "
+		eerror "notified of problems:"
+		eerror ""
+		eerror "ie: alertnotify=echo %%s | mail -s \"BPQ Alert\"" \
+			"admin@foo.com"
+		eerror ""
+		return 1
+	fi
+}

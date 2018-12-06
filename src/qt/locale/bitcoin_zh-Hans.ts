@@ -86,29 +86,13 @@
         <translation>导出地址列表</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>逗号分隔文件(*.csv)</translation>
-    </message>
-    <message>
         <source>Exporting Failed</source>
         <translation>导出失败</translation>
     </message>
-    <message>
-        <source>There was an error trying to save the address list to %1. Please try again.</source>
-        <translation>保存地址列表至%1时发生错误，请重试。</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>AddressTableModel</name>
-    <message>
-        <source>Label</source>
-        <translation>标签</translation>
-    </message>
-    <message>
-        <source>(no label)</source>
-        <translation>(无标签)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>AskPassphraseDialog</name>
     <message>
@@ -124,10 +108,6 @@
     </context>
 <context>
     <name>CoinControlDialog</name>
-    <message>
-        <source>(no label)</source>
-        <translation>(无标签)</translation>
-    </message>
     </context>
 <context>
     <name>EditAddressDialog</name>
@@ -176,29 +156,13 @@
     </context>
 <context>
     <name>ReceiveRequestDialog</name>
-    <message>
-        <source>Label</source>
-        <translation>标签</translation>
-    </message>
     </context>
 <context>
     <name>RecentRequestsTableModel</name>
-    <message>
-        <source>Label</source>
-        <translation>标签</translation>
-    </message>
-    <message>
-        <source>(no label)</source>
-        <translation>(无标签)</translation>
-    </message>
     </context>
 <context>
     <name>SendCoinsDialog</name>
-    <message>
-        <source>(no label)</source>
-        <translation>(无标签)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     </context>
@@ -225,25 +189,9 @@
     </context>
 <context>
     <name>TransactionTableModel</name>
-    <message>
-        <source>Label</source>
-        <translation>标签</translation>
-    </message>
-    <message>
-        <source>(no label)</source>
-        <translation>(无标签)</translation>
-    </message>
     </context>
 <context>
     <name>TransactionView</name>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>逗号分隔文件(*.csv)</translation>
-    </message>
-    <message>
-        <source>Label</source>
-        <translation>标签</translation>
-    </message>
     <message>
         <source>Exporting Failed</source>
         <translation>导出失败</translation>

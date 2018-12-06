@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -43,7 +44,7 @@ class CoinControlDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit CoinControlDialog(const PlatformStyle *platformStyle, QWidget *parent = 0);
+    explicit CoinControlDialog(const PlatformStyle *platformStyle, bool fBitcoinOnly = false, QWidget *parent = 0);
     ~CoinControlDialog();
 
     void setModel(WalletModel *model);
@@ -56,6 +57,7 @@ public:
     static bool fSubtractFeeFromAmount;
 
 private:
+	
     Ui::CoinControlDialog *ui;
     WalletModel *model;
     int sortColumn;
@@ -68,6 +70,7 @@ private:
     QAction *unlockAction;
 
     const PlatformStyle *platformStyle;
+	bool fBitcoinOnly;
 
     void sortView(int, Qt::SortOrder);
     void updateView();
@@ -79,6 +82,7 @@ private:
         COLUMN_LABEL,
         COLUMN_ADDRESS,
         COLUMN_DATE,
+        COLUMN_USECOUNT,
         COLUMN_CONFIRMATIONS,
         COLUMN_TXHASH,
         COLUMN_VOUT_INDEX,

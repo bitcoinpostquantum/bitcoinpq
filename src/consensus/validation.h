@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +10,7 @@
 #include <string>
 #include <version.h>
 #include <consensus/consensus.h>
+#include <consensus/params.h>
 #include <primitives/transaction.h>
 #include <primitives/block.h>
 
@@ -95,11 +97,19 @@ public:
 // weight = (stripped_size * 3) + total_size.
 static inline int64_t GetTransactionWeight(const CTransaction& tx)
 {
-    return ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) * (WITNESS_SCALE_FACTOR - 1) + ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
+    return ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) * (WITNESS_SCALE_FACTOR -1) + ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 }
-static inline int64_t GetBlockWeight(const CBlock& block)
+
+static inline int64_t GetBlockWeight(const CBlock& block, const Consensus::Params& params)
 {
-    return ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) * (WITNESS_SCALE_FACTOR - 1) + ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
+    // This implements the weight = (stripped_size * 4) + witness_size formula,
+    // using only serialization with and without witness data. As witness_size
+    // is equal to total_size - stripped_size, this formula is identical to:
+    // weight = (stripped_size * 3) + total_size.
+    return ((::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS)
+             * (WITNESS_SCALE_FACTOR - 1))
+            + ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION));
 }
+
 
 #endif // BITCOIN_CONSENSUS_VALIDATION_H

@@ -7,10 +7,14 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_raises_rpc_error
 
 class DeprecatedRpcTest(BitcoinTestFramework):
+
     def set_test_params(self):
         self.num_nodes = 2
         self.setup_clean_chain = True
-        self.extra_args = [[], ["-deprecatedrpc=estimatefee", "-deprecatedrpc=createmultisig"]]
+        self.extra_args = [
+            ["-addresstype=legacy"], 
+            ["-addresstype=legacy", "-deprecatedrpc=estimatefee", "-deprecatedrpc=createmultisig"]
+        ]
 
     def run_test(self):
         self.log.info("estimatefee: Shows deprecated message")

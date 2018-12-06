@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -39,7 +40,7 @@ BOOST_AUTO_TEST_CASE(GetSigOpCount)
     BOOST_CHECK_EQUAL(s1.GetSigOpCount(true), 3U);
     BOOST_CHECK_EQUAL(s1.GetSigOpCount(false), 21U);
 
-    CScript p2sh = GetScriptForDestination(CScriptID(s1));
+    CScript p2sh = GetScriptForDestination(CScriptID(s1, 0));
     CScript scriptSig;
     scriptSig << OP_0 << Serialize(s1);
     BOOST_CHECK_EQUAL(p2sh.GetSigOpCount(scriptSig), 3U);
@@ -48,14 +49,14 @@ BOOST_AUTO_TEST_CASE(GetSigOpCount)
     for (int i = 0; i < 3; i++)
     {
         CKey k;
-        k.MakeNewKey(true);
+        k.MakeNewKey(CKeyType::ECDSA_COMPRESSED);
         keys.push_back(k.GetPubKey());
     }
     CScript s2 = GetScriptForMultisig(1, keys);
     BOOST_CHECK_EQUAL(s2.GetSigOpCount(true), 3U);
     BOOST_CHECK_EQUAL(s2.GetSigOpCount(false), 20U);
 
-    p2sh = GetScriptForDestination(CScriptID(s2));
+    p2sh = GetScriptForDestination(CScriptID(s2, 0));
     BOOST_CHECK_EQUAL(p2sh.GetSigOpCount(true), 0U);
     BOOST_CHECK_EQUAL(p2sh.GetSigOpCount(false), 0U);
     CScript scriptSig2;
@@ -118,7 +119,7 @@ BOOST_AUTO_TEST_CASE(GetTxSigOpCost)
     CCoinsViewCache coins(&coinsDummy);
     // Create key
     CKey key;
-    key.MakeNewKey(true);
+    key.MakeNewKey(CKeyType::ECDSA_COMPRESSED);
     CPubKey pubkey = key.GetPubKey();
     // Default flags
     int flags = SCRIPT_VERIFY_WITNESS | SCRIPT_VERIFY_P2SH;
@@ -144,7 +145,7 @@ BOOST_AUTO_TEST_CASE(GetTxSigOpCost)
     // Multisig nested in P2SH
     {
         CScript redeemScript = CScript() << 1 << ToByteVector(pubkey) << ToByteVector(pubkey) << 2 << OP_CHECKMULTISIGVERIFY;
-        CScript scriptPubKey = GetScriptForDestination(CScriptID(redeemScript));
+        CScript scriptPubKey = GetScriptForDestination(CScriptID(redeemScript, 0));
         CScript scriptSig = CScript() << OP_0 << OP_0 << ToByteVector(redeemScript);
 
         BuildTxs(spendingTx, coins, creationTx, scriptPubKey, scriptSig, CScriptWitness());
@@ -168,9 +169,9 @@ BOOST_AUTO_TEST_CASE(GetTxSigOpCost)
         assert(GetTransactionSigOpCost(CTransaction(spendingTx), coins, flags & ~SCRIPT_VERIFY_WITNESS) == 0);
         assert(VerifyWithFlag(creationTx, spendingTx, flags) == SCRIPT_ERR_EQUALVERIFY);
 
-        // The sig op cost for witness version != 0 is zero.
+        // The sig op cost for witness version > 1 is zero.
         assert(scriptPubKey[0] == 0x00);
-        scriptPubKey[0] = 0x51;
+        scriptPubKey[0] = 0x52;
         BuildTxs(spendingTx, coins, creationTx, scriptPubKey, scriptSig, scriptWitness);
         assert(GetTransactionSigOpCost(CTransaction(spendingTx), coins, flags) == 0);
         scriptPubKey[0] = 0x00;
@@ -185,7 +186,7 @@ BOOST_AUTO_TEST_CASE(GetTxSigOpCost)
     {
         CScript p2pk = CScript() << ToByteVector(pubkey) << OP_CHECKSIG;
         CScript scriptSig = GetScriptForWitness(p2pk);
-        CScript scriptPubKey = GetScriptForDestination(CScriptID(scriptSig));
+        CScript scriptPubKey = GetScriptForDestination(CScriptID(scriptSig, 0));
         scriptSig = CScript() << ToByteVector(scriptSig);
         CScriptWitness scriptWitness;
         scriptWitness.stack.push_back(std::vector<unsigned char>(0));
@@ -207,16 +208,17 @@ BOOST_AUTO_TEST_CASE(GetTxSigOpCost)
         scriptWitness.stack.push_back(std::vector<unsigned char>(witnessScript.begin(), witnessScript.end()));
 
         BuildTxs(spendingTx, coins, creationTx, scriptPubKey, scriptSig, scriptWitness);
-        assert(GetTransactionSigOpCost(CTransaction(spendingTx), coins, flags) == 2);
-        assert(GetTransactionSigOpCost(CTransaction(spendingTx), coins, flags & ~SCRIPT_VERIFY_WITNESS) == 0);
-        assert(VerifyWithFlag(creationTx, spendingTx, flags) == SCRIPT_ERR_CHECKMULTISIGVERIFY);
+        int n = GetTransactionSigOpCost(CTransaction(spendingTx), coins, flags);
+        BOOST_CHECK_MESSAGE(n == 2, "OpCost: " << n << " != 2");
+        BOOST_CHECK(GetTransactionSigOpCost(CTransaction(spendingTx), coins, flags & ~SCRIPT_VERIFY_WITNESS) == 0);
+        BOOST_CHECK(VerifyWithFlag(creationTx, spendingTx, flags) == SCRIPT_ERR_CHECKMULTISIGVERIFY);
     }
 
     // P2WSH nested in P2SH
     {
         CScript witnessScript = CScript() << 1 << ToByteVector(pubkey) << ToByteVector(pubkey) << 2 << OP_CHECKMULTISIGVERIFY;
         CScript redeemScript = GetScriptForWitness(witnessScript);
-        CScript scriptPubKey = GetScriptForDestination(CScriptID(redeemScript));
+        CScript scriptPubKey = GetScriptForDestination(CScriptID(redeemScript, 0));
         CScript scriptSig = CScript() << ToByteVector(redeemScript);
         CScriptWitness scriptWitness;
         scriptWitness.stack.push_back(std::vector<unsigned char>(0));
@@ -224,8 +226,8 @@ BOOST_AUTO_TEST_CASE(GetTxSigOpCost)
         scriptWitness.stack.push_back(std::vector<unsigned char>(witnessScript.begin(), witnessScript.end()));
 
         BuildTxs(spendingTx, coins, creationTx, scriptPubKey, scriptSig, scriptWitness);
-        assert(GetTransactionSigOpCost(CTransaction(spendingTx), coins, flags) == 2);
-        assert(VerifyWithFlag(creationTx, spendingTx, flags) == SCRIPT_ERR_CHECKMULTISIGVERIFY);
+        BOOST_CHECK(GetTransactionSigOpCost(CTransaction(spendingTx), coins, flags) == 2);
+        BOOST_CHECK(VerifyWithFlag(creationTx, spendingTx, flags) == SCRIPT_ERR_CHECKMULTISIGVERIFY);
     }
 }
 

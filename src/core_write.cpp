@@ -182,6 +182,18 @@ void TxToUniv(const CTransaction& tx, const uint256& hashBlock, UniValue& entry,
                     txinwitness.push_back(HexStr(item.begin(), item.end()));
                 }
                 in.pushKV("txinwitness", txinwitness);
+
+                UniValue subkey_index(UniValue::VARR);
+                for (auto && sig : tx.vin[i].scriptWitness.stack)
+                {
+                    if (!xmss_is_der_signature(sig))
+                        continue;
+
+                    int64_t subkey = xmss_get_use_count_from_der_sig(sig);
+                    subkey_index.push_back(subkey);
+                }
+
+                in.pushKV("subkey_index", subkey_index);
             }
         }
         in.pushKV("sequence", (int64_t)txin.nSequence);

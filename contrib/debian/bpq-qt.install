@@ -1,0 +1,6 @@
+usr/local/bin/bpq-qt usr/bin
+share/pixmaps/bpq32.xpm usr/share/pixmaps
+share/pixmaps/bpq16.xpm usr/share/pixmaps
+share/pixmaps/bpq128.png usr/share/pixmaps
+debian/bpq-qt.desktop usr/share/applications
+debian/bpq-qt.protocol usr/share/kde4/services/

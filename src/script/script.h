@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +8,7 @@
 #define BITCOIN_SCRIPT_SCRIPT_H
 
 #include <crypto/common.h>
+#include <uint256.h>
 #include <prevector.h>
 #include <serialize.h>
 
@@ -20,7 +22,8 @@
 #include <vector>
 
 // Maximum number of bytes pushable to the stack
-static const unsigned int MAX_SCRIPT_ELEMENT_SIZE = 520;
+//static const unsigned int MAX_SCRIPT_ELEMENT_SIZE = 520;
+static const unsigned int MAX_SCRIPT_ELEMENT_SIZE = 16000; // TODO: clarify
 
 // Maximum number of non-push operations per script
 static const int MAX_OPS_PER_SCRIPT = 201;
@@ -29,7 +32,7 @@ static const int MAX_OPS_PER_SCRIPT = 201;
 static const int MAX_PUBKEYS_PER_MULTISIG = 20;
 
 // Maximum script length in bytes
-static const int MAX_SCRIPT_SIZE = 10000;
+static const int MAX_SCRIPT_SIZE = 20000; // TODO: clarify
 
 // Maximum number of values on script interpreter stack
 static const int MAX_STACK_SIZE = 1000;
@@ -383,7 +386,8 @@ private:
  * Tests in October 2015 showed use of this reduced dbcache memory usage by 23%
  *  and made an initial sync 13% faster.
  */
-typedef prevector<28, unsigned char> CScriptBase;
+//typedef prevector<28, unsigned char> CScriptBase;
+typedef prevector<36, unsigned char> CScriptBase;
 
 /** Serialized script, used inside transaction inputs and outputs */
 class CScript : public CScriptBase
@@ -667,6 +671,9 @@ public:
         CScriptBase::clear();
         shrink_to_fit();
     }
+    
+    uint256 Hash_SHA256() const;
+    uint256 Hash_SHAKE128() const;
 };
 
 struct CScriptWitness

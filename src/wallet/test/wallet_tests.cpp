@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -188,11 +189,11 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
         add_coin( 3*COIN);
         add_coin( 4*COIN); // now we have 5+6+7+8+18+20+30+100+200+300+400 = 1094 cents
         BOOST_CHECK( testWallet.SelectCoinsMinConf(95 * CENT, 1, 1, 0, vCoins, setCoinsRet, nValueRet));
-        BOOST_CHECK_EQUAL(nValueRet, 1 * COIN);  // we should get 1 BTC in 1 coin
+        BOOST_CHECK_EQUAL(nValueRet, 1 * COIN);  // we should get 1 BPQ in 1 coin
         BOOST_CHECK_EQUAL(setCoinsRet.size(), 1U);
 
         BOOST_CHECK( testWallet.SelectCoinsMinConf(195 * CENT, 1, 1, 0, vCoins, setCoinsRet, nValueRet));
-        BOOST_CHECK_EQUAL(nValueRet, 2 * COIN);  // we should get 2 BTC in 1 coin
+        BOOST_CHECK_EQUAL(nValueRet, 2 * COIN);  // we should get 2 BPQ in 1 coin
         BOOST_CHECK_EQUAL(setCoinsRet.size(), 1U);
 
         // empty the wallet and start again, now with fractions of a cent, to test small change avoidance
@@ -423,7 +424,7 @@ BOOST_FIXTURE_TEST_CASE(rescan, TestChain100Setup)
         key.clear();
         key.setObject();
         CKey futureKey;
-        futureKey.MakeNewKey(true);
+        futureKey.MakeNewKey(CKeyType::ECDSA_COMPRESSED);
         key.pushKV("scriptPubKey", HexStr(GetScriptForRawPubKey(futureKey.GetPubKey())));
         key.pushKV("timestamp", newTip->GetBlockTimeMax() + TIMESTAMP_WINDOW + 1);
         key.pushKV("internal", UniValue(true));
@@ -438,7 +439,7 @@ BOOST_FIXTURE_TEST_CASE(rescan, TestChain100Setup)
                       "timestamp %d. There was an error reading a block from time %d, which is after or within %d "
                       "seconds of key creation, and could contain transactions pertaining to the key. As a result, "
                       "transactions and coins using this key may not appear in the wallet. This error could be caused "
-                      "by pruning or data corruption (see bitcoind log for details) and could be dealt with by "
+                      "by pruning or data corruption (see bpqd log for details) and could be dealt with by "
                       "downloading and rescanning the relevant blocks (see -reindex and -rescan "
                       "options).\"}},{\"success\":true}]",
                               0, oldTip->GetBlockTimeMax(), TIMESTAMP_WINDOW));
@@ -658,6 +659,7 @@ public:
 BOOST_FIXTURE_TEST_CASE(ListCoins, ListCoinsTestingSetup)
 {
     std::string coinbaseAddress = coinbaseKey.GetPubKey().GetID().ToString();
+//	CPubKey spendPubKey{ ParseHex("10040000041fbc5c165084cf9bd6cee5e8016ca89e5c27a49474ffde09f5bc45eaa392a3ab230f806e5e55a25bd41167a6dc9d7a6be3c201e6aca1d4d6953636249066477f51164514680c0ee228a6f17306368fe1a3fc1014445c7079fb4dfe9e0c2a70327e2c3fc177732dbc1509418d43579f5580ca6a88417adacf0067f5ac08f538f9") };
 
     // Confirm ListCoins initially returns 1 coin grouped under coinbaseKey
     // address.
@@ -700,4 +702,164 @@ BOOST_FIXTURE_TEST_CASE(ListCoins, ListCoinsTestingSetup)
     BOOST_CHECK_EQUAL(list.begin()->second.size(), 2);
 }
 
+
+CTxDestination GetNewAddress(CWallet & wallet, CPubKey & pubkey, OutputType output_type)
+{
+    BOOST_REQUIRE(wallet.GetNewKey(pubkey, KeyTypeFromOutputType(output_type), false));
+
+    wallet.LearnRelatedScripts(pubkey, output_type);
+
+    return GetDestinationForKey(pubkey, output_type);
+}
+
+BOOST_FIXTURE_TEST_CASE(test_ismine, ListCoinsTestingSetup)
+{
+    LOCK(wallet->cs_wallet);
+
+    CPubKey pubkey1;
+    CPubKey pubkey2;
+    CPubKey pubkey3;
+    CPubKey pubkey4;
+
+    CTxDestination dest1 = GetNewAddress(*wallet, pubkey1, OUTPUT_TYPE_LEGACY);
+    BOOST_CHECK(IsValidDestination(dest1));
+
+    CTxDestination dest2 = GetNewAddress(*wallet, pubkey2, OutputType::OUTPUT_TYPE_P2SH_SEGWIT);
+    BOOST_CHECK(IsValidDestination(dest2));
+
+    CTxDestination dest3 = GetNewAddress(*wallet, pubkey3, OutputType::OUTPUT_TYPE_BECH32);
+    BOOST_CHECK(IsValidDestination(dest3));
+
+    CTxDestination dest4 = GetNewAddress(*wallet, pubkey4, OutputType::OUTPUT_TYPE_BECH32_V1);
+    BOOST_CHECK(IsValidDestination(dest4));
+
+    CScript scriptPubKey1 = GetScriptForDestination(dest1);
+    CScript scriptPubKey2 = GetScriptForDestination(dest2);
+    CScript scriptPubKey3 = GetScriptForDestination(dest3);
+    CScript scriptPubKey4 = GetScriptForDestination(dest4);
+       
+    BOOST_CHECK(IsMine(*wallet, scriptPubKey1));
+    BOOST_CHECK(IsMine(*wallet, scriptPubKey2));
+    BOOST_CHECK(IsMine(*wallet, scriptPubKey3));
+    BOOST_CHECK(IsMine(*wallet, scriptPubKey4));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(wallet_tests2, BasicTestingSetup)
+		
+class MockDB
+{
+public:
+	
+	MockDB()
+	{
+	    ::bitdb.MakeMock();
+	}
+
+	~MockDB()
+	{
+		::bitdb.Flush(true);
+		::bitdb.Reset();
+	}
+};
+
+void show_keys(CWallet & wallet)
+{
+	auto && keys = wallet.GetKeys();
+	for (auto && k : keys)
+	{
+		BOOST_TEST_MESSAGE("KeyID: " << HexStr(k));
+		
+		CKey key;
+		BOOST_CHECK(wallet.GetKey(k, key));
+
+		CPubKey pubkey;
+		BOOST_TEST_MESSAGE("pubkey: " << HexStr(pubkey));
+	}
+}
+
+BOOST_AUTO_TEST_CASE(create_and_reload)
+{
+	std::string walletFile("wallet_test.dat");
+	bool fFirstRun = false;
+	
+	CKeyID idkey1;
+	CKeyID idkey2;
+
+	MockDB mockdb;
+	
+	{
+		BOOST_TEST_MESSAGE("=== Creating wallet ===");
+
+		std::unique_ptr<CWalletDBWrapper> dbw(new CWalletDBWrapper(&bitdb, walletFile));
+		CWallet wallet(std::move(dbw));
+		
+		DBErrors nLoadWalletRet = wallet.LoadWallet(fFirstRun);
+		BOOST_CHECK_MESSAGE(nLoadWalletRet == DB_LOAD_OK, "LoadWallet failed: " << nLoadWalletRet);
+
+		BOOST_TEST_MESSAGE("LoadWallet1 FirstRun: " << fFirstRun);
+		show_keys(wallet);
+
+        // generate a new master key
+        //CPubKey masterPubKey = wallet.GenerateNewHDMasterKey();
+        //if (!wallet.SetHDMasterKey(masterPubKey))
+        //    throw std::runtime_error(std::string(__func__) + ": Storing master key failed");
+		
+		CPubKey pubkey1;
+		BOOST_CHECK_MESSAGE(wallet.GetNewKey(pubkey1, CKeyType::XMSS_256_H10, false), "wallet.GetNewKey failed");
+		BOOST_TEST_MESSAGE("created pubkey1: " << HexStr(pubkey1));
+		idkey1 = pubkey1.GetID();
+
+		CPubKey pubkey2;
+		BOOST_CHECK_MESSAGE(wallet.GetNewKey(pubkey2, CKeyType::XMSS_256_H16, false), "wallet.GetNewKey failed");
+		BOOST_TEST_MESSAGE("created pubkey2: " << HexStr(pubkey2));
+		idkey2 = pubkey2.GetID();
+		
+		CKey key1;
+		BOOST_CHECK_MESSAGE(wallet.GetKey(idkey1, key1), "key1 not found");
+		BOOST_TEST_MESSAGE("pubkey1: " << HexStr(key1.GetPubKey()));
+		BOOST_CHECK(pubkey1 == key1.GetPubKey());
+		BOOST_CHECK_MESSAGE(key1.VerifyPubKey(pubkey1), "key1 invalid: " << ShortStr(HexStr(key1)));
+
+		CKey key2;
+		BOOST_CHECK_MESSAGE(wallet.GetKey(idkey2, key2), "key2 not found");
+		BOOST_TEST_MESSAGE("pubkey2: " << HexStr(key2.GetPubKey()));
+		BOOST_CHECK(pubkey2 == key2.GetPubKey());
+		BOOST_CHECK_MESSAGE(key2.VerifyPubKey(pubkey2), "key2 invalid: " << ShortStr(HexStr(key2)));
+		
+		//
+		wallet.Flush(true);
+	}
+
+	if (0)
+	{
+		BOOST_TEST_MESSAGE("=== Reloading wallet ===");
+
+		std::unique_ptr<CWalletDBWrapper> dbw(new CWalletDBWrapper(&bitdb, walletFile));
+		CWallet wallet(std::move(dbw));
+		
+		DBErrors nLoadWalletRet = wallet.LoadWallet(fFirstRun);
+		BOOST_CHECK_MESSAGE(nLoadWalletRet == DB_LOAD_OK, "LoadWallet faile: " << nLoadWalletRet);
+
+		BOOST_TEST_MESSAGE("LoadWallet2 FirstRun: " << fFirstRun);
+		show_keys(wallet);
+
+		CKey key1;
+		BOOST_CHECK_MESSAGE(wallet.GetKey(idkey1, key1), "key1 not found");
+		CPubKey pubkey1 = key1.GetPubKey();
+		BOOST_TEST_MESSAGE("pubkey1: " << HexStr(pubkey1));
+		BOOST_CHECK_MESSAGE(key1.VerifyPubKey(pubkey1), "key1 invalid: " << ShortStr(HexStr(key1)));
+
+		CKey key2;
+		BOOST_CHECK_MESSAGE(wallet.GetKey(idkey2, key2), "key2 not found");
+		CPubKey pubkey2 = key2.GetPubKey();
+		BOOST_TEST_MESSAGE("pubkey2: " << HexStr(pubkey2));
+		BOOST_CHECK_MESSAGE(key2.VerifyPubKey(pubkey2), "key2 invalid: " << ShortStr(HexStr(key2)));
+	
+		wallet.Flush(true);
+	}
+}		
+
+BOOST_AUTO_TEST_SUITE_END()
+

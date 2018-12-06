@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -131,6 +132,20 @@ static bool rest_headers(HTTPRequest* req,
     std::vector<std::string> path;
     boost::split(path, param, boost::is_any_of("/"));
 
+    if (path.size() != 2 && (path.size() != 3 || path[0] != "legacy")) {
+        return RESTERR(req, HTTP_BAD_REQUEST, "No header count specified. Use /rest/headers/<count>/<hash>.<ext> or /rest/headers/legacy/<count>/<hash>.<ext>.");
+    }                           //use old rule if URI=/legacy/<COUNT>/<BLOCK-HASH>
+    std::string headerCount,hashStr;
+
+    if (path.size() == 2) {
+        headerCount = path[0];
+        hashStr = path[1];
+    }
+    else {
+        headerCount = path[1];
+        hashStr = path[2];
+    }
+
     if (path.size() != 2)
         return RESTERR(req, HTTP_BAD_REQUEST, "No header count specified. Use /rest/headers/<count>/<hash>.<ext>.");
 
@@ -138,7 +153,6 @@ static bool rest_headers(HTTPRequest* req,
     if (count < 1 || count > 2000)
         return RESTERR(req, HTTP_BAD_REQUEST, "Header count out of range: " + path[0]);
 
-    std::string hashStr = path[1];
     uint256 hash;
     if (!ParseHashStr(hashStr, hash))
         return RESTERR(req, HTTP_BAD_REQUEST, "Invalid hash: " + hashStr);

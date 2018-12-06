@@ -1,0 +1,3 @@
+[submodule "src/bpqcrypto"]
+	path = src/bpqcrypto
+	url = https://github.com/bitcoinpostquantum/bpqcrypto

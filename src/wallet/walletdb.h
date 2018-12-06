@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -100,7 +101,7 @@ public:
     int64_t nCreateTime; // 0 means unknown
     std::string hdKeypath; //optional HD/bip32 keypath
     CKeyID hdMasterKeyID; //id of the HD masterkey used to derive this key
-
+	
     CKeyMetadata()
     {
         SetNull();
@@ -132,6 +133,8 @@ public:
         hdMasterKeyID.SetNull();
     }
 };
+
+typedef std::vector<uint8_t> CKeyHashTree;
 
 /** Access to the wallet database.
  * This should really be named CWalletDBBatch, as it represents a single transaction at the
@@ -179,8 +182,13 @@ public:
     bool WriteTx(const CWalletTx& wtx);
     bool EraseTx(uint256 hash);
 
-    bool WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata &keyMeta);
-    bool WriteCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret, const CKeyMetadata &keyMeta);
+	bool WriteKeyUseCount(const CPubKey& vchPubKey, uint64_t use_count);
+	
+    bool WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, 
+		const CKeyMetadata &keyMeta);
+    bool WriteCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret, 
+		const CKeyMetadata &keyMeta);
+	
     bool WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey);
 
     bool WriteCScript(const uint160& hash, const CScript& redeemScript);

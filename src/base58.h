@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -103,6 +104,7 @@ public:
     void SetKey(const CKey& vchSecret);
     CKey GetKey();
     bool IsValid() const;
+    bool IsBitcoinSecret() const;
     bool SetString(const char* pszSecret);
     bool SetString(const std::string& strSecret);
 
@@ -143,7 +145,9 @@ typedef CBitcoinExtKeyBase<CExtKey, BIP32_EXTKEY_SIZE, CChainParams::EXT_SECRET_
 typedef CBitcoinExtKeyBase<CExtPubKey, BIP32_EXTKEY_SIZE, CChainParams::EXT_PUBLIC_KEY> CBitcoinExtPubKey;
 
 std::string EncodeDestination(const CTxDestination& dest);
+
 CTxDestination DecodeDestination(const std::string& str);
+
 bool IsValidDestinationString(const std::string& str);
 bool IsValidDestinationString(const std::string& str, const CChainParams& params);
 

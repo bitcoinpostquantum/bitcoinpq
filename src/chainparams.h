@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,8 +9,11 @@
 
 #include <chainparamsbase.h>
 #include <consensus/params.h>
+#include "crypto/equihash.h"
 #include <primitives/block.h>
 #include <protocol.h>
+#include <script/standard.h>
+#include <pubkey.h>
 
 #include <memory>
 #include <vector>
@@ -47,6 +51,8 @@ public:
         SECRET_KEY,
         EXT_PUBLIC_KEY,
         EXT_SECRET_KEY,
+		//BPQ_PUBKEY_ADDRESS = 16,
+		BPQ_SECRET_KEY = 17,
 
         MAX_BASE58_TYPES
     };
@@ -61,6 +67,9 @@ public:
     /** Policy: Filter transactions that do not match well-defined patterns */
     bool RequireStandard() const { return fRequireStandard; }
     uint64_t PruneAfterHeight() const { return nPruneAfterHeight; }
+    unsigned int EquihashN() const { return nEquihashN; }
+    unsigned int EquihashK() const { return nEquihashK; }
+    unsigned int EquihashSolutionWidth() const { return EhSolutionWidth(EquihashN(), EquihashK()); }
     /** Make miner stop after a block is found. In RPC, don't return until nGenProcLimit blocks are generated */
     bool MineBlocksOnDemand() const { return fMineBlocksOnDemand; }
     /** Return the BIP70 network string (main, test or regtest) */
@@ -68,21 +77,51 @@ public:
     /** Return the list of hostnames to look up for DNS seeds */
     const std::vector<std::string>& DNSSeeds() const { return vSeeds; }
     const std::vector<unsigned char>& Base58Prefix(Base58Type type) const { return base58Prefixes[type]; }
-    const std::string& Bech32HRP() const { return bech32_hrp; }
+    const std::string& Bech32HRP_Bitcoin() const { return bech32_hrp_bitcoin; }
+    const std::string& Bech32HRP_BPQ() const { return bech32_hrp_bpq; }
     const std::vector<SeedSpec6>& FixedSeeds() const { return vFixedSeeds; }
     const CCheckpointData& Checkpoints() const { return checkpointData; }
     const ChainTxData& TxData() const { return chainTxData; }
     void UpdateVersionBitsParameters(Consensus::DeploymentPos d, int64_t nStartTime, int64_t nTimeout);
+
+	/// default XMSS keyType for chain
+	CKeyType ChainKeyType() const { return chainKeyType; }
+	
+	bool IsPremineBlock(uint32_t height) const {
+		return (uint32_t)consensus.BPQHeight <= height &&
+			height < (uint32_t)(consensus.BPQHeight + consensus.BPQPremineWindow);
+	}
+    /** Checkes if the pubkey script is correct for a given block height */
+    bool IsPremineAddressScript(const CScript& scriptPubKey, uint32_t height) const;    
+
+    CScript GetPremineCoinbaseRedeemScript(uint32_t height) const;    
+
+    CTxDestination GetPremineCoinbaseDestination(uint32_t height) const
+    {
+        return WitnessV1ScriptHash(GetPremineCoinbaseRedeemScript(height));
+    }
+
+    
+	// for test/regtest
+	void UpdatePremineKeys(std::vector<std::vector<std::string>> const & pubkeys) {
+		vPreminePubkeys = pubkeys;
+	}
+	
 protected:
+
     CChainParams() {}
 
     Consensus::Params consensus;
+	
     CMessageHeader::MessageStartChars pchMessageStart;
     int nDefaultPort;
     uint64_t nPruneAfterHeight;
+    unsigned int nEquihashN = 0;
+    unsigned int nEquihashK = 0;
     std::vector<std::string> vSeeds;
     std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];
-    std::string bech32_hrp;
+    std::string bech32_hrp_bitcoin;
+    std::string bech32_hrp_bpq;
     std::string strNetworkID;
     CBlock genesis;
     std::vector<SeedSpec6> vFixedSeeds;
@@ -91,6 +130,10 @@ protected:
     bool fMineBlocksOnDemand;
     CCheckpointData checkpointData;
     ChainTxData chainTxData;
+    std::vector<std::vector<std::string> > vPreminePubkeys;
+    int nPremineLockTime;
+    int nPremineLockStages;    
+	CKeyType chainKeyType;
 };
 
 /**

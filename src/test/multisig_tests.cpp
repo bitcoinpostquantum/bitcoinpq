@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -28,8 +29,9 @@ sign_multisig(CScript scriptPubKey, std::vector<CKey> keys, CTransaction transac
     for (const CKey &key : keys)
     {
         std::vector<unsigned char> vchSig;
-        BOOST_CHECK(key.Sign(hash, vchSig));
+        BOOST_CHECK(key.SignHash(hash, vchSig));
         vchSig.push_back((unsigned char)SIGHASH_ALL);
+		
         result << vchSig;
     }
     return result;
@@ -43,7 +45,7 @@ BOOST_AUTO_TEST_CASE(multisig_verify)
     CKey key[4];
     CAmount amount = 0;
     for (int i = 0; i < 4; i++)
-        key[i].MakeNewKey(true);
+        key[i].MakeNewKey(CKeyType::ECDSA_COMPRESSED);
 
     CScript a_and_b;
     a_and_b << OP_2 << ToByteVector(key[0].GetPubKey()) << ToByteVector(key[1].GetPubKey()) << OP_2 << OP_CHECKMULTISIG;
@@ -139,7 +141,7 @@ BOOST_AUTO_TEST_CASE(multisig_IsStandard)
 {
     CKey key[4];
     for (int i = 0; i < 4; i++)
-        key[i].MakeNewKey(true);
+        key[i].MakeNewKey(CKeyType::ECDSA_COMPRESSED);
 
     txnouttype whichType;
 
@@ -178,7 +180,7 @@ BOOST_AUTO_TEST_CASE(multisig_Sign)
     CKey key[4];
     for (int i = 0; i < 4; i++)
     {
-        key[i].MakeNewKey(true);
+        key[i].MakeNewKey(CKeyType::ECDSA_COMPRESSED);
         keystore.AddKey(key[i]);
     }
 

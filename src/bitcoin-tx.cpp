@@ -1,9 +1,10 @@
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #if defined(HAVE_CONFIG_H)
-#include <config/bitcoin-config.h>
+#include <config/bpq-config.h>
 #endif
 
 #include <base58.h>
@@ -311,7 +312,7 @@ static void MutateTxAddOutPubKey(CMutableTransaction& tx, const std::string& str
     }
 
     if (bSegWit) {
-        if (!pubkey.IsCompressed()) {
+        if (!is_key_segwit_useable(pubkey)) {
             throw std::runtime_error("Uncompressed pubkeys are not useable for SegWit outputs");
         }
         // Call GetScriptForWitness() to build a P2WSH scriptPubKey
@@ -319,7 +320,7 @@ static void MutateTxAddOutPubKey(CMutableTransaction& tx, const std::string& str
     }
     if (bScriptHash) {
         // Get the ID for the script, and then construct a P2SH destination for it.
-        scriptPubKey = GetScriptForDestination(CScriptID(scriptPubKey));
+        scriptPubKey = GetScriptForDestination(CScriptID(scriptPubKey, 0));
     }
 
     // construct TxOut, append to transaction output list
@@ -380,7 +381,7 @@ static void MutateTxAddOutMultiSig(CMutableTransaction& tx, const std::string& s
 
     if (bSegWit) {
         for (CPubKey& pubkey : pubkeys) {
-            if (!pubkey.IsCompressed()) {
+            if (!is_key_segwit_useable(pubkey)) {
                 throw std::runtime_error("Uncompressed pubkeys are not useable for SegWit outputs");
             }
         }
@@ -393,7 +394,7 @@ static void MutateTxAddOutMultiSig(CMutableTransaction& tx, const std::string& s
                         "redeemScript exceeds size limit: %d > %d", scriptPubKey.size(), MAX_SCRIPT_ELEMENT_SIZE));
         }
         // Get the ID for the script, and then construct a P2SH destination for it.
-        scriptPubKey = GetScriptForDestination(CScriptID(scriptPubKey));
+        scriptPubKey = GetScriptForDestination(CScriptID(scriptPubKey, 0));
     }
 
     // construct TxOut, append to transaction output list
@@ -465,7 +466,7 @@ static void MutateTxAddOutScript(CMutableTransaction& tx, const std::string& str
             throw std::runtime_error(strprintf(
                         "redeemScript exceeds size limit: %d > %d", scriptPubKey.size(), MAX_SCRIPT_ELEMENT_SIZE));
         }
-        scriptPubKey = GetScriptForDestination(CScriptID(scriptPubKey));
+        scriptPubKey = GetScriptForDestination(CScriptID(scriptPubKey, 0));
     }
 
     // construct TxOut, append to transaction output list
@@ -626,12 +627,12 @@ static void MutateTxSign(CMutableTransaction& tx, const std::string& flagStr)
                 UniValue v = prevOut["redeemScript"];
                 std::vector<unsigned char> rsData(ParseHexUV(v, "redeemScript"));
                 CScript redeemScript(rsData.begin(), rsData.end());
-                tempKeystore.AddCScript(redeemScript);
+                tempKeystore.AddCScript(redeemScript, DetectScriptVersion(redeemScript));
             }
         }
     }
 
-    const CKeyStore& keystore = tempKeystore;
+    CKeyStore& keystore = tempKeystore;
 
     bool fHashSingle = ((nHashType & ~SIGHASH_ANYONECANPAY) == SIGHASH_SINGLE);
 

@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2017 The Bitcoin Core developers
 // Copyright (c) 2017 The Zcash developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,231 +14,432 @@
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 
-static secp256k1_context* secp256k1_context_sign = nullptr;
+#include <botan/auto_rng.h>
+#include <botan/xmss.h>
 
-/** These functions are taken from the libsecp256k1 distribution and are very ugly. */
+#include <stdexcept>
 
-/**
- * This parses a format loosely based on a DER encoding of the ECPrivateKey type from
- * section C.4 of SEC 1 <http://www.secg.org/sec1-v2.pdf>, with the following caveats:
- *
- * * The octet-length of the SEQUENCE must be encoded as 1 or 2 octets. It is not
- *   required to be encoded as one octet if it is less than 256, as DER would require.
- * * The octet-length of the SEQUENCE must not be greater than the remaining
- *   length of the key encoding, but need not match it (i.e. the encoding may contain
- *   junk after the encoded SEQUENCE).
- * * The privateKey OCTET STRING is zero-filled on the left to 32 octets.
- * * Anything after the encoding of the privateKey OCTET STRING is ignored, whether
- *   or not it is validly encoded DER.
- *
- * out32 must point to an output buffer of length at least 32 bytes.
- */
-static int ec_privkey_import_der(const secp256k1_context* ctx, unsigned char *out32, const unsigned char *privkey, size_t privkeylen) {
-    const unsigned char *end = privkey + privkeylen;
-    memset(out32, 0, 32);
-    /* sequence header */
-    if (end - privkey < 1 || *privkey != 0x30u) {
-        return 0;
+#include <util.h>
+#include <utilstrencodings.h>
+
+#include "keystore.h"
+
+bool CKey::force_signing = false;
+
+
+void check_use_count(uint8_t const * key, size_t key_size, size_t use_count, size_t utxo_count)
+{
+    if (CKey::force_signing)
+        return;
+    
+    auto info = bpqcrypto::get_key_info(key, key_size);
+    
+    if (info.is_xmss)
+    {
+        size_t max_use_count = 1u << info.tree_height;
+        
+        if (use_count >= max_use_count/2)
+        {
+            throw std::runtime_error("key use_count exeedes half limit");
+        }
+
+        if (utxo_count >= (max_use_count-use_count)/2)
+        {
+            throw std::runtime_error("key UTXO count exeedes half limit");
+        }
     }
-    privkey++;
-    /* sequence length constructor */
-    if (end - privkey < 1 || !(*privkey & 0x80u)) {
-        return 0;
-    }
-    size_t lenb = *privkey & ~0x80u; privkey++;
-    if (lenb < 1 || lenb > 2) {
-        return 0;
-    }
-    if (end - privkey < lenb) {
-        return 0;
-    }
-    /* sequence length */
-    size_t len = privkey[lenb-1] | (lenb > 1 ? privkey[lenb-2] << 8 : 0u);
-    privkey += lenb;
-    if (end - privkey < len) {
-        return 0;
-    }
-    /* sequence element 0: version number (=1) */
-    if (end - privkey < 3 || privkey[0] != 0x02u || privkey[1] != 0x01u || privkey[2] != 0x01u) {
-        return 0;
-    }
-    privkey += 3;
-    /* sequence element 1: octet string, up to 32 bytes */
-    if (end - privkey < 2 || privkey[0] != 0x04u) {
-        return 0;
-    }
-    size_t oslen = privkey[1];
-    privkey += 2;
-    if (oslen > 32 || end - privkey < oslen) {
-        return 0;
-    }
-    memcpy(out32 + (32 - oslen), privkey, oslen);
-    if (!secp256k1_ec_seckey_verify(ctx, out32)) {
-        memset(out32, 0, 32);
-        return 0;
-    }
-    return 1;
 }
 
-/**
- * This serializes to a DER encoding of the ECPrivateKey type from section C.4 of SEC 1
- * <http://www.secg.org/sec1-v2.pdf>. The optional parameters and publicKey fields are
- * included.
- *
- * privkey must point to an output buffer of length at least CKey::PRIVATE_KEY_SIZE bytes.
- * privkeylen must initially be set to the size of the privkey buffer. Upon return it
- * will be set to the number of bytes used in the buffer.
- * key32 must point to a 32-byte raw private key.
- */
-static int ec_privkey_export_der(const secp256k1_context *ctx, unsigned char *privkey, size_t *privkeylen, const unsigned char *key32, int compressed) {
-    assert(*privkeylen >= CKey::PRIVATE_KEY_SIZE);
-    secp256k1_pubkey pubkey;
-    size_t pubkeylen = 0;
-    if (!secp256k1_ec_pubkey_create(ctx, &pubkey, key32)) {
-        *privkeylen = 0;
-        return 0;
-    }
-    if (compressed) {
-        static const unsigned char begin[] = {
-            0x30,0x81,0xD3,0x02,0x01,0x01,0x04,0x20
-        };
-        static const unsigned char middle[] = {
-            0xA0,0x81,0x85,0x30,0x81,0x82,0x02,0x01,0x01,0x30,0x2C,0x06,0x07,0x2A,0x86,0x48,
-            0xCE,0x3D,0x01,0x01,0x02,0x21,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-            0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-            0xFF,0xFF,0xFE,0xFF,0xFF,0xFC,0x2F,0x30,0x06,0x04,0x01,0x00,0x04,0x01,0x07,0x04,
-            0x21,0x02,0x79,0xBE,0x66,0x7E,0xF9,0xDC,0xBB,0xAC,0x55,0xA0,0x62,0x95,0xCE,0x87,
-            0x0B,0x07,0x02,0x9B,0xFC,0xDB,0x2D,0xCE,0x28,0xD9,0x59,0xF2,0x81,0x5B,0x16,0xF8,
-            0x17,0x98,0x02,0x21,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-            0xFF,0xFF,0xFF,0xFF,0xFE,0xBA,0xAE,0xDC,0xE6,0xAF,0x48,0xA0,0x3B,0xBF,0xD2,0x5E,
-            0x8C,0xD0,0x36,0x41,0x41,0x02,0x01,0x01,0xA1,0x24,0x03,0x22,0x00
-        };
-        unsigned char *ptr = privkey;
-        memcpy(ptr, begin, sizeof(begin)); ptr += sizeof(begin);
-        memcpy(ptr, key32, 32); ptr += 32;
-        memcpy(ptr, middle, sizeof(middle)); ptr += sizeof(middle);
-        pubkeylen = CPubKey::COMPRESSED_PUBLIC_KEY_SIZE;
-        secp256k1_ec_pubkey_serialize(ctx, ptr, &pubkeylen, &pubkey, SECP256K1_EC_COMPRESSED);
-        ptr += pubkeylen;
-        *privkeylen = ptr - privkey;
-        assert(*privkeylen == CKey::COMPRESSED_PRIVATE_KEY_SIZE);
-    } else {
-        static const unsigned char begin[] = {
-            0x30,0x82,0x01,0x13,0x02,0x01,0x01,0x04,0x20
-        };
-        static const unsigned char middle[] = {
-            0xA0,0x81,0xA5,0x30,0x81,0xA2,0x02,0x01,0x01,0x30,0x2C,0x06,0x07,0x2A,0x86,0x48,
-            0xCE,0x3D,0x01,0x01,0x02,0x21,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-            0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-            0xFF,0xFF,0xFE,0xFF,0xFF,0xFC,0x2F,0x30,0x06,0x04,0x01,0x00,0x04,0x01,0x07,0x04,
-            0x41,0x04,0x79,0xBE,0x66,0x7E,0xF9,0xDC,0xBB,0xAC,0x55,0xA0,0x62,0x95,0xCE,0x87,
-            0x0B,0x07,0x02,0x9B,0xFC,0xDB,0x2D,0xCE,0x28,0xD9,0x59,0xF2,0x81,0x5B,0x16,0xF8,
-            0x17,0x98,0x48,0x3A,0xDA,0x77,0x26,0xA3,0xC4,0x65,0x5D,0xA4,0xFB,0xFC,0x0E,0x11,
-            0x08,0xA8,0xFD,0x17,0xB4,0x48,0xA6,0x85,0x54,0x19,0x9C,0x47,0xD0,0x8F,0xFB,0x10,
-            0xD4,0xB8,0x02,0x21,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-            0xFF,0xFF,0xFF,0xFF,0xFE,0xBA,0xAE,0xDC,0xE6,0xAF,0x48,0xA0,0x3B,0xBF,0xD2,0x5E,
-            0x8C,0xD0,0x36,0x41,0x41,0x02,0x01,0x01,0xA1,0x44,0x03,0x42,0x00
-        };
-        unsigned char *ptr = privkey;
-        memcpy(ptr, begin, sizeof(begin)); ptr += sizeof(begin);
-        memcpy(ptr, key32, 32); ptr += 32;
-        memcpy(ptr, middle, sizeof(middle)); ptr += sizeof(middle);
-        pubkeylen = CPubKey::PUBLIC_KEY_SIZE;
-        secp256k1_ec_pubkey_serialize(ctx, ptr, &pubkeylen, &pubkey, SECP256K1_EC_UNCOMPRESSED);
-        ptr += pubkeylen;
-        *privkeylen = ptr - privkey;
-        assert(*privkeylen == CKey::PRIVATE_KEY_SIZE);
-    }
-    return 1;
+bool CKey::ECDSA_Check(const unsigned char *vch) 
+{
+	return ecdsa_check_private_key(vch);
 }
 
-bool CKey::Check(const unsigned char *vch) {
-    return secp256k1_ec_seckey_verify(secp256k1_context_sign, vch);
+void CKey::Set( uint8_t const * data, size_t size, CKeyStore * keystore )
+{
+	if ( bpqcrypto::is_xmss_short_key(data, size) )
+	{
+		keydata = bpqcrypto::xmss_get_long_key(secure_vector(data, data + size));
+		fValid = true;
+		fLegacy = false;
+	}
+	else if ( bpqcrypto::is_xmss_key(data, size) )
+	{
+		keydata.assign(data, data + size);
+		fValid = true;
+		fLegacy = false;
+	}
+	else if (bpqcrypto::is_ecdsa_key(data, size))
+	{
+		keydata.assign(data, data + 32);
+		fCompressed = size == 33 && data[32] == 1;
+		fValid = true;
+		fLegacy = true;
+	}
+	else
+	{
+		//throw std::invalid_argument( strprintf("invalid key") );
+		fValid = false;
+	}
+	
+	if (keystore)
+	{
+		m_pKeyStore = keystore;
+	}
 }
 
-void CKey::MakeNewKey(bool fCompressedIn) {
-    do {
-        GetStrongRandBytes(keydata.data(), keydata.size());
-    } while (!Check(keydata.data()));
-    fValid = true;
-    fCompressed = fCompressedIn;
+void CKey::MakeNewKey(CKeyType ktype) 
+{
+	if (ktype == CKeyType::ECDSA_UNCOMPRESSED || ktype == CKeyType::ECDSA_COMPRESSED)
+	{
+		LogPrintf("%s: ECDSA\n", __func__);
+
+		keydata.resize(ECDSA_INTERNAL_KEY_SIZE);
+		do {
+			GetStrongRandBytes(keydata.data(), keydata.size());
+		} while (!ECDSA_Check(keydata.data()));
+		fValid = true;
+		fLegacy = true;
+		fCompressed = ktype == CKeyType::ECDSA_COMPRESSED;
+	}
+	else
+	{
+		LogPrintf("%s: %s\n", __func__, KeyTypeToString(ktype));
+
+        try
+        {
+			keydata = bpqcrypto::xmss_generate(ktype);
+			
+			fValid = true;
+			fLegacy = false;
+        }
+        catch (std::exception &e)
+        {
+			LogPrintf("%s XMSS failed: %s\n", __func__, e.what());
+            fValid = false;
+        }
+	}
 }
 
-CPrivKey CKey::GetPrivKey() const {
+unsigned int CKey::size() const
+{
+	return keydata.size();
+}
+
+bpqcrypto::secure_vector<uint8_t> CKey::raw_private_key_legacy() const
+{
+	if ( IsXMSS() )
+		return {};
+		
+	bpqcrypto::secure_vector<uint8_t> k;
+
+	k.reserve(33);
+	k.assign( begin(), end());
+	
+	if (IsCompressed())
+		k.push_back(1);
+	
+	return k;
+}
+
+size_t CKey::short_size() const
+{
+	if ( IsXMSS() )
+	{
+		return bpqcrypto::xmss_get_short_key_size(keydata);
+	} else
+	{
+		return size();
+	}
+}
+
+bpqcrypto::secure_vector<uint8_t> CKey::raw_short_key() const
+{
+	if ( IsXMSS() )
+	{
+		return bpqcrypto::xmss_get_short_key(keydata);
+	} else
+	{
+		bpqcrypto::secure_vector<uint8_t> k;
+		k.reserve(keydata.size() + 1);
+		k.assign( keydata.begin(), keydata.end() );
+		if (IsCompressed())
+			k.push_back(1);
+		return k;
+	}
+}
+
+bpqcrypto::secure_vector<uint8_t> CKey::raw_private_key() const
+{
+	if ( IsXMSS() )
+	{
+		return keydata;
+	} else
+	{
+		bpqcrypto::secure_vector<uint8_t> k;
+		k.reserve(keydata.size() + 1);
+		k.assign( keydata.begin(), keydata.end() );
+		if (IsCompressed())
+			k.push_back(1);
+		return k;
+	}
+}
+
+CPrivKey CKey::GetPrivKey() const 
+{
     assert(fValid);
-    CPrivKey privkey;
-    int ret;
-    size_t privkeylen;
-    privkey.resize(PRIVATE_KEY_SIZE);
-    privkeylen = PRIVATE_KEY_SIZE;
-    ret = ec_privkey_export_der(secp256k1_context_sign, (unsigned char*) privkey.data(), &privkeylen, begin(), fCompressed ? SECP256K1_EC_COMPRESSED : SECP256K1_EC_UNCOMPRESSED);
-    assert(ret);
-    privkey.resize(privkeylen);
-    return privkey;
+
+    if ( IsXMSS() )
+	{
+	    CPrivKey privkey;
+		LogPrintf("%s: xmss key size: %d\n", __func__, keydata.size());
+
+        // TODO: make in DER format
+        //auto && privkey = raw_private_key();
+        auto && rawkey = raw_private_key();
+        privkey.assign(rawkey.begin(), rawkey.end());
+
+		LogPrintf("%s: xmss privkey size: %d\n", __func__, privkey.size());
+
+        assert(privkey.size() > 0);
+		
+	    return privkey;	
+	}
+	else
+    {
+		// ECDSA
+		return ecdsa_private_export_der(keydata.data(), keydata.size(), fCompressed);
+    }
 }
 
-CPubKey CKey::GetPubKey() const {
-    assert(fValid);
-    secp256k1_pubkey pubkey;
-    size_t clen = CPubKey::PUBLIC_KEY_SIZE;
-    CPubKey result;
-    int ret = secp256k1_ec_pubkey_create(secp256k1_context_sign, &pubkey, begin());
-    assert(ret);
-    secp256k1_ec_pubkey_serialize(secp256k1_context_sign, (unsigned char*)result.begin(), &clen, &pubkey, fCompressed ? SECP256K1_EC_COMPRESSED : SECP256K1_EC_UNCOMPRESSED);
-    assert(result.size() == clen);
-    assert(result.IsValid());
-    return result;
+CPubKey CKey::GetPubKey() const 
+{
+	if (!IsValid())
+		return {};
+		
+	if ( IsXMSS() )
+	{
+		return CPubKey(bpqcrypto::xmss_get_pubkey(keydata));
+	}
+	else
+	{
+		CPubKey result(ecdsa_extract_public_key_from_private(
+			keydata.data(), keydata.size(), fCompressed));
+		return result;
+	}
 }
 
-bool CKey::Sign(const uint256 &hash, std::vector<unsigned char>& vchSig, uint32_t test_case) const {
+bool CKey::Sign(const uint8_t * msg, size_t msg_size, std::vector<unsigned char>& vchSig, uint32_t test_case) const 
+{
     if (!fValid)
         return false;
-    vchSig.resize(CPubKey::SIGNATURE_SIZE);
-    size_t nSigLen = CPubKey::SIGNATURE_SIZE;
-    unsigned char extra_entropy[32] = {0};
-    WriteLE32(extra_entropy, test_case);
-    secp256k1_ecdsa_signature sig;
-    int ret = secp256k1_ecdsa_sign(secp256k1_context_sign, &sig, hash.begin(), begin(), secp256k1_nonce_function_rfc6979, test_case ? extra_entropy : nullptr);
-    assert(ret);
-    secp256k1_ecdsa_signature_serialize_der(secp256k1_context_sign, (unsigned char*)vchSig.data(), &nSigLen, &sig);
-    vchSig.resize(nSigLen);
-    return true;
-}
 
-bool CKey::VerifyPubKey(const CPubKey& pubkey) const {
-    if (pubkey.IsCompressed() != fCompressed) {
-        return false;
+    if ( IsXMSS() )
+	{
+        try
+        {
+			size_t use_count = 0;
+			CKeyID keyid = GetPubKey().GetID();
+			
+			if (m_pKeyStore)
+            {
+				use_count = m_pKeyStore->GetKeyUseCountInc(keyid);
+                
+                // TODO: get key TXO count
+                size_t txo_count = 0;
+                check_use_count(keydata.data(), keydata.size(), use_count, txo_count);
+            }
+
+			vchSig = bpqcrypto::xmss_sign(msg, msg_size, keydata.data(), keydata.size(), use_count);
+			
+			if (m_pKeyStore)
+				m_pKeyStore->SetKeyUseCount(keyid, use_count);
+
+			LogPrintf("%s: xmss: msg size: %d, key size: %d, signature size: %d, use_count: %d\n", 
+				__func__, msg_size, keydata.size(), vchSig.size(), use_count );
+			
+            return true;
+        }
+        catch (std::exception &e)
+        {
+			LogPrintf("%s: [EX]: %s\n", __func__, e.what());
+			throw;
+            return false;
+        }
+	}
+	else
+    {
+		uint256 hash;
+		if (msg_size == 1 && msg[0] == 1 )
+		{
+			// special case
+		    hash = uint256S("0000000000000000000000000000000000000000000000000000000000000001");
+		} else
+		{
+			hash = Hash(msg, msg + msg_size);
+		}
+		vchSig = ecdsa_sign(keydata.data(), keydata.size(), hash, test_case);
+		return true;
     }
-    unsigned char rnd[8];
-    std::string str = "Bitcoin key verification\n";
-    GetRandBytes(rnd, sizeof(rnd));
-    uint256 hash;
-    CHash256().Write((unsigned char*)str.data(), str.size()).Write(rnd, sizeof(rnd)).Finalize(hash.begin());
-    std::vector<unsigned char> vchSig;
-    Sign(hash, vchSig);
-    return pubkey.Verify(hash, vchSig);
+
+    return false;
 }
 
-bool CKey::SignCompact(const uint256 &hash, std::vector<unsigned char>& vchSig) const {
+bool CKey::SignHash(const uint256 &hash, std::vector<unsigned char>& vchSig, uint32_t test_case) const 
+{
     if (!fValid)
         return false;
-    vchSig.resize(CPubKey::COMPACT_SIGNATURE_SIZE);
-    int rec = -1;
-    secp256k1_ecdsa_recoverable_signature sig;
-    int ret = secp256k1_ecdsa_sign_recoverable(secp256k1_context_sign, &sig, hash.begin(), begin(), secp256k1_nonce_function_rfc6979, nullptr);
-    assert(ret);
-    secp256k1_ecdsa_recoverable_signature_serialize_compact(secp256k1_context_sign, (unsigned char*)&vchSig[1], &rec, &sig);
-    assert(ret);
-    assert(rec != -1);
-    vchSig[0] = 27 + rec + (fCompressed ? 4 : 0);
-    return true;
+
+    if ( IsXMSS() )
+	{
+		//throw std::invalid_argument("xmss_sign does not accept hash as input");
+        
+        size_t use_count = 0;
+        CKeyID keyid = GetPubKey().GetID();
+
+        if (m_pKeyStore)
+        {
+            use_count = m_pKeyStore->GetKeyUseCountInc(keyid);
+            
+            // TODO: get key TXO count
+            size_t txo_count = 0;
+            check_use_count(keydata.data(), keydata.size(), use_count, txo_count);
+        }
+
+        vchSig = bpqcrypto::xmss_sign(&hash.begin()[0], hash.size(), 
+                keydata.data(), keydata.size(), use_count);
+
+        if (m_pKeyStore)
+            m_pKeyStore->SetKeyUseCount(keyid, use_count);
+     
+        return true;
+	}
+	else
+    {
+		vchSig = ecdsa_sign(keydata.data(), keydata.size(), hash, test_case);
+		return true;
+    }
+
+    return false;
 }
 
-bool CKey::Load(const CPrivKey &privkey, const CPubKey &vchPubKey, bool fSkipCheck=false) {
-    if (!ec_privkey_import_der(secp256k1_context_sign, (unsigned char*)begin(), privkey.data(), privkey.size()))
+bool CKey::VerifyPubKey(const CPubKey& pubkey) const 
+{
+	std::string str = "BPQ key verification\n";
+
+	if ( IsXMSS() )
+	{
+        return GetPubKey() == pubkey;
+        
+		if ( !pubkey.IsXMSS() )
+			return false;
+		
+		// TODO: make special implementation
+		
+		unsigned char rnd[8];
+		GetRandBytes(rnd, sizeof(rnd));
+		uint256 hash;
+		CHash256()
+			.Write((unsigned char*)str.data(), str.size())
+			.Write(rnd, sizeof(rnd)).Finalize(hash.begin());
+
+		std::vector<unsigned char> vchSig;
+		Sign(hash, vchSig);
+
+		return pubkey.Verify(hash, vchSig);
+	}
+	else
+	{
+		if (pubkey.IsCompressed() != fCompressed) {
+			return false;
+		}
+		unsigned char rnd[8];
+		GetRandBytes(rnd, sizeof(rnd));
+		uint256 hash;
+		CHash256().Write((unsigned char*)str.data(), str.size()).Write(rnd, sizeof(rnd)).Finalize(hash.begin());
+		std::vector<unsigned char> vchSig;
+		SignHash(hash, vchSig);
+		return pubkey.VerifyHash(hash, vchSig);
+	}
+}
+
+bool CKey::SignCompact(std::string const & msg, std::vector<unsigned char>& vchSig) const 
+{
+    if (!fValid)
         return false;
-    fCompressed = vchPubKey.IsCompressed();
-    fValid = true;
+	
+    if ( IsXMSS() )
+    {
+		size_t use_count = 0;
+		CKeyID keyid = GetPubKey().GetID();
+		
+		if (m_pKeyStore)
+			use_count = m_pKeyStore->GetKeyUseCountInc(keyid);
+
+		vchSig = xmss_sign_compact(keydata, use_count, (uint8_t const*)msg.data(), msg.size());
+
+		if (m_pKeyStore)
+			m_pKeyStore->SetKeyUseCount(keyid, use_count);
+
+		return true;
+    }
+    else
+    {
+		
+		vchSig = ecdsa_sign_compact(keydata.data(), keydata.size(), fCompressed, 
+				Hash(msg.begin(), msg.end()));
+		
+        return true;
+    }	
+}
+
+bool CKey::SignCompact(const uint256 &hash, std::vector<unsigned char>& vchSig) const 
+{
+    if (!fValid)
+        return false;
+
+    if ( IsXMSS() )
+    {
+        return SignHash(hash, vchSig);
+    }
+    else
+    {
+		vchSig = ecdsa_sign_compact(keydata.data(), keydata.size(), fCompressed, hash);
+        return true;
+    }	
+    if (!fValid)
+        return false;
+}
+
+bool CKey::Load(const CPrivKey &privkey, const CPubKey &vchPubKey, bool fSkipCheck=false) 
+{
+    if ( vchPubKey.IsXMSS() )
+	{
+        // XMSS
+		LogPrintf("%s: xmss pkey: %d bytes, pubkey: %s\n", __func__,
+				privkey.size(), HexStr(vchPubKey).c_str());
+
+        Set(privkey.data(), privkey.size());
+	}
+	else
+    {
+		LogPrintf("%s: legacy pkey: %d bytes, pubkey: %s\n", __func__, 
+				privkey.size(), HexStr(vchPubKey).c_str());
+		
+        // ECDSA
+		
+		auto key = ecdsa_import_der_privkey(privkey);
+        if (key.empty())
+		{
+			LogPrintf("CKey::Load: ec_privkey_import_der failed\n");
+            return false;
+		}
+		keydata.assign(key.begin(), key.end());
+
+        fCompressed = vchPubKey.IsCompressed();
+        fValid = true;
+		fLegacy = true;
+    }
 
     if (fSkipCheck)
         return true;
@@ -245,24 +447,36 @@ bool CKey::Load(const CPrivKey &privkey, const CPubKey &vchPubKey, bool fSkipChe
     return VerifyPubKey(vchPubKey);
 }
 
-bool CKey::Derive(CKey& keyChild, ChainCode &ccChild, unsigned int nChild, const ChainCode& cc) const {
-    assert(IsValid());
-    assert(IsCompressed());
-    std::vector<unsigned char, secure_allocator<unsigned char>> vout(64);
-    if ((nChild >> 31) == 0) {
-        CPubKey pubkey = GetPubKey();
-        assert(pubkey.size() == CPubKey::COMPRESSED_PUBLIC_KEY_SIZE);
-        BIP32Hash(cc, nChild, *pubkey.begin(), pubkey.begin()+1, vout.data());
-    } else {
-        assert(size() == 32);
-        BIP32Hash(cc, nChild, 0, begin(), vout.data());
+bool CKey::Derive(CKey& keyChild, ChainCode &ccChild, unsigned int nChild, const ChainCode& cc) const 
+{
+    if ( !IsXMSS() )
+    {
+        assert(IsValid());
+        assert(IsCompressed());
+        std::vector<unsigned char, secure_allocator<unsigned char>> vout(64);
+        if ((nChild >> 31) == 0) {
+            CPubKey pubkey = GetPubKey();
+            assert(pubkey.size() == CPubKey::ECDSA_COMPRESSED_PUBLIC_KEY_SIZE);
+            BIP32Hash(cc, nChild, *pubkey.begin(), pubkey.begin()+1, vout.data());
+        } else {
+            assert(size() == 32);
+            BIP32Hash(cc, nChild, 0, begin(), vout.data());
+        }
+        memcpy(ccChild.begin(), vout.data()+32, 32);
+        memcpy((unsigned char*)keyChild.begin(), begin(), 32);
+		
+		bool ret = ecdsa_privkey_tweak_add((unsigned char*)keyChild.begin(), vout);
+		
+        keyChild.fLegacy = true;
+        keyChild.fCompressed = true;
+        keyChild.fValid = ret;
+        return ret;
     }
-    memcpy(ccChild.begin(), vout.data()+32, 32);
-    memcpy((unsigned char*)keyChild.begin(), begin(), 32);
-    bool ret = secp256k1_ec_privkey_tweak_add(secp256k1_context_sign, (unsigned char*)keyChild.begin(), vout.data());
-    keyChild.fCompressed = true;
-    keyChild.fValid = ret;
-    return ret;
+    else
+    {
+        // XMSS: not implemented
+        return false;
+    }	
 }
 
 bool CExtKey::Derive(CExtKey &out, unsigned int _nChild) const {
@@ -273,18 +487,21 @@ bool CExtKey::Derive(CExtKey &out, unsigned int _nChild) const {
     return key.Derive(out.key, out.chaincode, _nChild, chaincode);
 }
 
-void CExtKey::SetMaster(const unsigned char *seed, unsigned int nSeedLen) {
+void CExtKey::SetMaster(const unsigned char *seed, unsigned int nSeedLen) 
+{
+//    static const unsigned char hashkey[] = {'B','p','q','_','b','p','q',' ','s','e','e','d'};
     static const unsigned char hashkey[] = {'B','i','t','c','o','i','n',' ','s','e','e','d'};
     std::vector<unsigned char, secure_allocator<unsigned char>> vout(64);
     CHMAC_SHA512(hashkey, sizeof(hashkey)).Write(seed, nSeedLen).Finalize(vout.data());
-    key.Set(vout.data(), vout.data() + 32, true);
+    key.SetLegacy(vout.data(), vout.data() + 32, true);
     memcpy(chaincode.begin(), vout.data() + 32, 32);
     nDepth = 0;
     nChild = 0;
     memset(vchFingerprint, 0, sizeof(vchFingerprint));
 }
 
-CExtPubKey CExtKey::Neuter() const {
+CExtPubKey CExtKey::Neuter() const 
+{
     CExtPubKey ret;
     ret.nDepth = nDepth;
     memcpy(&ret.vchFingerprint[0], &vchFingerprint[0], 4);
@@ -310,38 +527,13 @@ void CExtKey::Decode(const unsigned char code[BIP32_EXTKEY_SIZE]) {
     memcpy(vchFingerprint, code+1, 4);
     nChild = (code[5] << 24) | (code[6] << 16) | (code[7] << 8) | code[8];
     memcpy(chaincode.begin(), code+9, 32);
-    key.Set(code+42, code+BIP32_EXTKEY_SIZE, true);
+    key.SetLegacy(code+42, code+BIP32_EXTKEY_SIZE, true);
 }
 
 bool ECC_InitSanityCheck() {
     CKey key;
-    key.MakeNewKey(true);
+    key.MakeNewKey(CKeyType::ECDSA_COMPRESSED);
     CPubKey pubkey = key.GetPubKey();
     return key.VerifyPubKey(pubkey);
 }
 
-void ECC_Start() {
-    assert(secp256k1_context_sign == nullptr);
-
-    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
-    assert(ctx != nullptr);
-
-    {
-        // Pass in a random blinding seed to the secp256k1 context.
-        std::vector<unsigned char, secure_allocator<unsigned char>> vseed(32);
-        GetRandBytes(vseed.data(), 32);
-        bool ret = secp256k1_context_randomize(ctx, vseed.data());
-        assert(ret);
-    }
-
-    secp256k1_context_sign = ctx;
-}
-
-void ECC_Stop() {
-    secp256k1_context *ctx = secp256k1_context_sign;
-    secp256k1_context_sign = nullptr;
-
-    if (ctx) {
-        secp256k1_context_destroy(ctx);
-    }
-}

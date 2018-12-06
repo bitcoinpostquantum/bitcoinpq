@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,6 +9,7 @@
 
 #include <script/script_error.h>
 #include <primitives/transaction.h>
+#include <streams.h>
 
 #include <vector>
 #include <stdint.h>
@@ -112,9 +114,6 @@ enum
     //
     SCRIPT_VERIFY_WITNESS_PUBKEYTYPE = (1U << 15),
 
-    // Making OP_CODESEPARATOR and FindAndDelete fail any non-segwit scripts
-    //
-    SCRIPT_VERIFY_CONST_SCRIPTCODE = (1U << 16),
 };
 
 bool CheckSignatureEncoding(const std::vector<unsigned char> &vchSig, unsigned int flags, ScriptError* serror);
@@ -131,9 +130,11 @@ enum SigVersion
 {
     SIGVERSION_BASE = 0,
     SIGVERSION_WITNESS_V0 = 1,
+    SIGVERSION_WITNESS_V1 = 2,
 };
 
-uint256 SignatureHash(const CScript &scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache = nullptr);
+uint256 SignatureHash(const CScript & scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache = nullptr);
+CDataStream Signature(const CScript & scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache = nullptr);
 
 class BaseSignatureChecker
 {
@@ -165,7 +166,9 @@ private:
     const PrecomputedTransactionData* txdata;
 
 protected:
-    virtual bool VerifySignature(const std::vector<unsigned char>& vchSig, const CPubKey& vchPubKey, const uint256& sighash) const;
+	
+    virtual bool VerifySignature(const std::vector<unsigned char>& vchSig, const CPubKey& vchPubKey, CDataStream const & msg) const;
+    virtual bool VerifySignatureHash(const std::vector<unsigned char>& vchSig, const CPubKey& vchPubKey, const uint256& sighash) const;
 
 public:
     TransactionSignatureChecker(const CTransaction* txToIn, unsigned int nInIn, const CAmount& amountIn) : txTo(txToIn), nIn(nInIn), amount(amountIn), txdata(nullptr) {}
@@ -182,6 +185,18 @@ private:
 
 public:
     MutableTransactionSignatureChecker(const CMutableTransaction* txToIn, unsigned int nInIn, const CAmount& amountIn) : TransactionSignatureChecker(&txTo, nInIn, amountIn), txTo(*txToIn) {}
+};
+
+class CollectorSignatureChecker : public BaseSignatureChecker
+{
+public:
+	
+	using pubkey_sig_pair = std::pair<std::vector<unsigned char>, std::vector<unsigned char> >;
+	mutable std::vector<pubkey_sig_pair> m_signatures;
+	
+public:
+    CollectorSignatureChecker() {}
+    bool CheckSig(const std::vector<unsigned char>& scriptSig, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const override;
 };
 
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* error = nullptr);

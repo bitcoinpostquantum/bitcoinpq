@@ -168,7 +168,7 @@ class SegWitTest(BitcoinTestFramework):
         # Create a transaction that spends the coinbase
         tx = CTransaction()
         tx.vin.append(CTxIn(COutPoint(txid, 0), b""))
-        tx.vout.append(CTxOut(49 * 100000000, CScript([OP_TRUE, OP_DROP] * 15 + [OP_TRUE])))
+        tx.vout.append(CTxOut(49*100000000, CScript([OP_TRUE])))
         tx.calc_sha256()
 
         # Check that serializing it with or without witness is the same
@@ -209,7 +209,7 @@ class SegWitTest(BitcoinTestFramework):
         # rule).
         test_witness_block(self.nodes[0].rpc, self.test_node, block, accepted=False)
         # TODO: fix synchronization so we can test reject reason
-        # Right now, bitcoind delays sending reject messages for blocks
+        # Right now, bpqd delays sending reject messages for blocks
         # until the future, making synchronization here difficult.
         #assert_equal(self.test_node.last_message["reject"].reason, "unexpected-witness")
 
@@ -259,7 +259,7 @@ class SegWitTest(BitcoinTestFramework):
         # Now create a new anyone-can-spend utxo for the next test.
         tx4 = CTransaction()
         tx4.vin.append(CTxIn(COutPoint(tx3.sha256, 0), CScript([p2sh_program])))
-        tx4.vout.append(CTxOut(tx3.vout[0].nValue - 1000, CScript([OP_TRUE, OP_DROP] * 15 + [OP_TRUE])))
+        tx4.vout.append(CTxOut(tx3.vout[0].nValue-1000, CScript([OP_TRUE])))
         tx4.rehash()
         test_transaction_acceptance(self.nodes[0].rpc, self.test_node, tx3, False, True)
         test_transaction_acceptance(self.nodes[0].rpc, self.test_node, tx4, False, True)
@@ -533,7 +533,7 @@ class SegWitTest(BitcoinTestFramework):
         self.nodes[0].submitblock(bytes_to_hex_str(block.serialize(True)))
         assert(self.nodes[0].getbestblockhash() != block.hash)
 
-        # Now redo commitment with the standard nonce, but let bitcoind fill it in.
+        # Now redo commitment with the standard nonce, but let bpqd fill it in.
         add_witness_commitment(block, nonce=0)
         block.vtx[0].wit = CTxWitness()
         block.solve()
@@ -814,7 +814,7 @@ class SegWitTest(BitcoinTestFramework):
         assert(len(self.utxo))
         tx = CTransaction()
         tx.vin.append(CTxIn(COutPoint(self.utxo[0].sha256, self.utxo[0].n), b""))
-        tx.vout.append(CTxOut(self.utxo[0].nValue - 1000, CScript([OP_TRUE, OP_DROP] * 15 + [OP_TRUE])))
+        tx.vout.append(CTxOut(self.utxo[0].nValue-1000, CScript([OP_TRUE])))
         tx.wit.vtxinwit.append(CTxInWitness())
         tx.wit.vtxinwit[0].scriptWitness.stack = [ b'a' ]
         tx.rehash()
@@ -866,7 +866,7 @@ class SegWitTest(BitcoinTestFramework):
         assert(len(self.utxo))
         tx = CTransaction()
         tx.vin.append(CTxIn(COutPoint(self.utxo[0].sha256, self.utxo[0].n), b""))
-        tx.vout.append(CTxOut(self.utxo[0].nValue - 1000, CScript([OP_TRUE, OP_DROP] * 15 + [OP_TRUE])))
+        tx.vout.append(CTxOut(self.utxo[0].nValue-1000, CScript([OP_TRUE])))
         tx.wit.vtxinwit.append(CTxInWitness())
         tx.wit.vtxinwit[0].scriptWitness.stack = [ b'a' ]
         tx.rehash()
@@ -910,7 +910,7 @@ class SegWitTest(BitcoinTestFramework):
         test_transaction_acceptance(self.nodes[1].rpc, self.std_node, tx3, True, False, b'tx-size')
 
         # Remove witness stuffing, instead add extra witness push on stack
-        tx3.vout[0] = CTxOut(tx2.vout[0].nValue - 1000, CScript([OP_TRUE, OP_DROP] * 15 + [OP_TRUE]))
+        tx3.vout[0] = CTxOut(tx2.vout[0].nValue-1000, CScript([OP_TRUE]))
         tx3.wit.vtxinwit[0].scriptWitness.stack = [CScript([CScriptNum(1)]), witness_program ]
         tx3.rehash()
 
@@ -1096,7 +1096,7 @@ class SegWitTest(BitcoinTestFramework):
             # P2PKH output; just send tx's first output back to an anyone-can-spend.
             sync_mempools([self.nodes[0], self.nodes[1]])
             tx3.vin = [CTxIn(COutPoint(tx.sha256, 0), b"")]
-            tx3.vout = [CTxOut(tx.vout[0].nValue - 1000, CScript([OP_TRUE, OP_DROP] * 15 + [OP_TRUE]))]
+            tx3.vout = [CTxOut(tx.vout[0].nValue-1000, CScript([OP_TRUE]))]
             tx3.wit.vtxinwit.append(CTxInWitness())
             tx3.wit.vtxinwit[0].scriptWitness.stack = [witness_program]
             tx3.rehash()
@@ -1104,7 +1104,7 @@ class SegWitTest(BitcoinTestFramework):
         else:
             # tx and tx2 didn't go anywhere; just clean up the p2sh_tx output.
             tx3.vin = [CTxIn(COutPoint(p2sh_tx.sha256, 0), CScript([witness_program]))]
-            tx3.vout = [CTxOut(p2sh_tx.vout[0].nValue - 1000, CScript([OP_TRUE, OP_DROP] * 15 + [OP_TRUE]))]
+            tx3.vout = [CTxOut(p2sh_tx.vout[0].nValue-1000, witness_program)]
             tx3.rehash()
             test_transaction_acceptance(self.nodes[0].rpc, self.test_node, tx3, with_witness=True, accepted=True)
 
@@ -1455,7 +1455,7 @@ class SegWitTest(BitcoinTestFramework):
         # This transaction should not be accepted into the mempool pre- or
         # post-segwit.  Mempool acceptance will use SCRIPT_VERIFY_WITNESS which
         # will require a witness to spend a witness program regardless of
-        # segwit activation.  Note that older bitcoind's that are not
+        # segwit activation.  Note that older bpqd's that are not
         # segwit-aware would also reject this for failing CLEANSTACK.
         test_transaction_acceptance(self.nodes[0].rpc, self.test_node, spend_tx, with_witness=False, accepted=False)
 
@@ -1491,12 +1491,12 @@ class SegWitTest(BitcoinTestFramework):
     # Test the behavior of starting up a segwit-aware node after the softfork
     # has activated.  As segwit requires different block data than pre-segwit
     # nodes would have stored, this requires special handling.
-    # To enable this test, pass --oldbinary=<path-to-pre-segwit-bitcoind> to
+    # To enable this test, pass --oldbinary=<path-to-pre-segwit-bpqd> to
     # the test.
     def test_upgrade_after_activation(self, node_id):
         self.log.info("Testing software upgrade after softfork activation")
 
-        assert(node_id != 0) # node0 is assumed to be a segwit-active bitcoind
+        assert(node_id != 0) # node0 is assumed to be a segwit-active bpqd
 
         # Make sure the nodes are all up
         sync_blocks(self.nodes)

@@ -3,11 +3,11 @@
     <name>AddressBookPage</name>
     <message>
         <source>Right-click to edit address or label</source>
-        <translation>برای تغییر آدرس و یا برچسب کلیک راست کنید</translation>
+        <translation>برای تغییر آدرس و یا برچسب کلیک راست کنید.</translation>
     </message>
     <message>
         <source>Create a new address</source>
-        <translation>ایجاد آدرس جدید</translation>
+        <translation>ایجاد نشانی جدید</translation>
     </message>
     <message>
         <source>&amp;New</source>
@@ -15,7 +15,7 @@
     </message>
     <message>
         <source>Copy the currently selected address to the system clipboard</source>
-        <translation>کپی‌برداری از آدرس منتخب به حافظهٔ سیستم</translation>
+        <translation>کپی نشانی انتخاب شده کنونی به حافظه‌ی سیستم</translation>
     </message>
     <message>
         <source>&amp;Copy</source>
@@ -27,11 +27,11 @@
     </message>
     <message>
         <source>Delete the currently selected address from the list</source>
-        <translation>حذف آدرس منتخب از لیست</translation>
+        <translation>حذف نشانی انتخاب‌شده کنونی از لیست</translation>
     </message>
     <message>
         <source>Export the data in the current tab to a file</source>
-        <translation>صدور داده‌های برگهٔ فعلی به یک پرونده</translation>
+        <translation>خروجی گرفتن داده‌های برگه‌ی فعلی به یک فایل</translation>
     </message>
     <message>
         <source>&amp;Export</source>
@@ -43,35 +43,35 @@
     </message>
     <message>
         <source>Choose the address to send coins to</source>
-        <translation>آدرس مورد نظر برای ارسال سکه‌ها را انتخاب کنید</translation>
+        <translation>آدرس مورد نظر برای ارسال کوین ها را انتخاب کنید</translation>
     </message>
     <message>
         <source>Choose the address to receive coins with</source>
-        <translation>آدرس موردنظر برای دریافت سکه‌ها را انتخاب کنید</translation>
+        <translation>آدرس موردنظر برای دریافت کوین ها را انتخاب کنید.</translation>
     </message>
     <message>
         <source>C&amp;hoose</source>
-        <translation>ان&amp;تخاب</translation>
+        <translation>انتخاب</translation>
     </message>
     <message>
         <source>Sending addresses</source>
-        <translation>آدرس‌های ارسالی</translation>
+        <translation>آدرس های فرستنده</translation>
     </message>
     <message>
         <source>Receiving addresses</source>
-        <translation>آدرس‌های دریافتی</translation>
+        <translation>آدرس های گیرنده</translation>
     </message>
     <message>
         <source>These are your Bitcoin addresses for sending payments. Always check the amount and the receiving address before sending coins.</source>
-        <translation>این‌ها آدرس‌های بیتکوین برای پرداخت‌ها هستند. همیشه قبل از فرستادن سکه‌ها مقدار و آدرس دریافت‌کننده را بررسی نمایید.</translation>
+        <translation>اینها آدرس های شما برای فرستادن پرداخت هاست. همیشه قبل از فرستادن سکه ها مقدار و آدرس دریافت کننده را چک کنید.</translation>
     </message>
     <message>
         <source>These are your Bitcoin addresses for receiving payments. It is recommended to use a new receiving address for each transaction.</source>
-        <translation>این‌ها آدرس‌های بیتکوین شما برای دریافت مبالغ می‌باشد. توصیه می‌شود برای هر تراکنش از یک آدرس جدید استفاده کنید.</translation>
+        <translation>این ها آدرس های بیت کوین شما برای دریافت پرداخت ها می باشد. توصیه میشود برای هر تراکنش از یک آدرس دریافت جدید استفاده کنید.</translation>
     </message>
     <message>
         <source>&amp;Copy Address</source>
-        <translation>کپ&amp;ی کردن آدرس</translation>
+        <translation>کپی کردن آدرس</translation>
     </message>
     <message>
         <source>Copy &amp;Label</source>
@@ -93,11 +93,7 @@
         <source>Exporting Failed</source>
         <translation>صدور موفق نبود</translation>
     </message>
-    <message>
-        <source>There was an error trying to save the address list to %1. Please try again.</source>
-        <translation>خطا در ذخیره‌سازی لیست آدرس‌ها در %1.</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>AddressTableModel</name>
     <message>
@@ -132,16 +128,12 @@
         <translation>تکرار گذرواژهٔ جدید</translation>
     </message>
     <message>
-        <source>Show password</source>
-        <translation>نمایش گذرواژه</translation>
-    </message>
-    <message>
         <source>Encrypt wallet</source>
         <translation>رمزنگاری کیف پول</translation>
     </message>
     <message>
         <source>This operation needs your wallet passphrase to unlock the wallet.</source>
-        <translation>این عملیات نیاز به عبارت کیف پول شما برای بازگشایی کیف پول دارد.</translation>
+        <translation>این عملیات نیاز به عبارت کیف پول شما برای بازگشایی کیف پول دارد</translation>
     </message>
     <message>
         <source>Unlock wallet</source>
@@ -411,7 +403,7 @@
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to Bitcoin network</source>
-        <translation><numerusform>%n ارتباط فعال با شبکهٔ بیت‌کوین</numerusform><numerusform>%n ارتباط فعال با شبکهٔ بیت‌کوین</numerusform></translation>
+        <translation><numerusform>%n ارتباط فعال با شبکهٔ بیت‌کوین</numerusform></translation>
     </message>
     <message>
         <source>Processing blocks on disk...</source>
@@ -419,7 +411,7 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>پردازش %n  بلاک از تاریخچه ی تراکنش ها </numerusform><numerusform>پردازش %n  بلاک از تاریخچه ی تراکنش ها </numerusform></translation>
+        <translation><numerusform>پردازش %n  بلاک از تاریخچه ی تراکنش ها </numerusform></translation>
     </message>
     <message>
         <source>%1 behind</source>
@@ -768,7 +760,7 @@
     </message>
     <message numerus="yes">
         <source>%n GB of free space available</source>
-        <translation><numerusform>%n گیگابایت فضا موجود است</numerusform><numerusform>%n گیگابایت فضا موجود است</numerusform></translation>
+        <translation><numerusform>%n گیگابایت فضا موجود است</numerusform></translation>
     </message>
     </context>
 <context>
@@ -1686,10 +1678,6 @@
     </context>
 <context>
     <name>WalletView</name>
-    <message>
-        <source>Export the data in the current tab to a file</source>
-        <translation>صدور داده‌های برگهٔ فعلی به یک پرونده</translation>
-    </message>
     </context>
 <context>
     <name>bitcoin-core</name>

@@ -1,14 +1,18 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2009-2016 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_PRIMITIVES_BLOCK_H
 #define BITCOIN_PRIMITIVES_BLOCK_H
 
-#include <primitives/transaction.h>
-#include <serialize.h>
-#include <uint256.h>
+#include "arith_uint256.h"
+#include "primitives/transaction.h"
+#include "serialize.h"
+#include "uint256.h"
+#include "version.h"
+#include <string.h>
 
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
@@ -20,13 +24,24 @@
 class CBlockHeader
 {
 public:
-    // header
-    int32_t nVersion;
+    static const size_t LEGACY_HEADER_SIZE = 4+32+32+4+4+4;
+    static const size_t BPQ_HEADER_SIZE = 1+4+32+32+32+4+4+32;  // Excluding Equihash solution
+
+    static const uint8_t BITCOIN_MAJOR_VERSION = 0;
+    static const uint8_t BPQ_MAJOR_VERSION = 1;
+
+    uint8_t nMajorVersion;  // used for hard forks
+    int32_t nMinorVersion;  // used for soft forks
+
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
+    uint256 hashWitnessMerkleRoot;  // reserved
+
     uint32_t nTime;
     uint32_t nBits;
-    uint32_t nNonce;
+
+    uint256 nNonce;
+    std::vector<unsigned char> nSolution;  // Equihash solution.
 
     CBlockHeader()
     {
@@ -36,23 +51,72 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action) {
-        READWRITE(this->nVersion);
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(nMajorVersion);
+        READWRITE(nMinorVersion);
+
         READWRITE(hashPrevBlock);
         READWRITE(hashMerkleRoot);
+        READWRITE(hashWitnessMerkleRoot);
+
         READWRITE(nTime);
         READWRITE(nBits);
+
         READWRITE(nNonce);
+        READWRITE(nSolution);  // var_int
+    }
+
+    template <typename Stream>
+    void SerializeLegacy(Stream &s) const
+    {
+        // serialize as bitcoin header
+
+        s << nMinorVersion;
+
+        s << hashPrevBlock;
+        s << hashMerkleRoot;
+
+        s << nTime;
+        s << nBits;
+
+        uint32_t legacy_nonce = (uint32_t)nNonce.GetUint64(0);
+        s << legacy_nonce;
+    }
+
+    template <typename Stream>
+    void UnserializeLegacy(Stream &s)
+    {
+        nMajorVersion = BITCOIN_MAJOR_VERSION;
+
+        s >> nMinorVersion;
+
+        s >> hashPrevBlock;
+        s >> hashMerkleRoot;
+        hashWitnessMerkleRoot.SetNull();
+
+        s >> nTime;
+        s >> nBits;
+
+        uint32_t legacy_nonce;
+        s >> legacy_nonce;
+        nNonce = ArithToUint256(arith_uint256(legacy_nonce));
+
+        nSolution.clear();
     }
 
     void SetNull()
     {
-        nVersion = 0;
+        nMajorVersion = 0;
+        nMinorVersion = 0;
+
         hashPrevBlock.SetNull();
         hashMerkleRoot.SetNull();
+        hashWitnessMerkleRoot.SetNull();
         nTime = 0;
         nBits = 0;
-        nNonce = 0;
+        nNonce.SetNull();
+        nSolution.clear();
     }
 
     bool IsNull() const
@@ -107,16 +171,46 @@ public:
     CBlockHeader GetBlockHeader() const
     {
         CBlockHeader block;
-        block.nVersion       = nVersion;
+        block.nMajorVersion  = nMajorVersion;
+        block.nMinorVersion       = nMinorVersion;
         block.hashPrevBlock  = hashPrevBlock;
         block.hashMerkleRoot = hashMerkleRoot;
+        block.hashWitnessMerkleRoot = hashWitnessMerkleRoot;
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        block.nSolution      = nSolution;
         return block;
     }
 
     std::string ToString() const;
+};
+
+/**
+ * Custom serializer for CBlockHeader that omits the nonce and solution, for use
+ * as input to Equihash.
+ */
+class CEquihashInput : private CBlockHeader
+{
+public:
+    CEquihashInput(const CBlockHeader &header)
+    {
+        CBlockHeader::SetNull();
+        *((CBlockHeader*)this) = header;
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(nMajorVersion);
+        READWRITE(nMinorVersion);
+        READWRITE(hashPrevBlock);
+        READWRITE(hashMerkleRoot);
+        READWRITE(hashWitnessMerkleRoot);
+        READWRITE(nTime);
+        READWRITE(nBits);
+    }
 };
 
 /** Describes a place in the block chain to another node such that if the
@@ -129,7 +223,7 @@ struct CBlockLocator
 
     CBlockLocator() {}
 
-    explicit CBlockLocator(const std::vector<uint256>& vHaveIn) : vHave(vHaveIn) {}
+    CBlockLocator(const std::vector<uint256>& vHaveIn) : vHave(vHaveIn) {}
 
     ADD_SERIALIZE_METHODS;
 

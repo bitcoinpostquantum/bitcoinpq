@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -194,9 +195,17 @@ public:
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     bool IsSpendable(const CTxDestination& dest) const;
     bool getPrivKey(const CKeyID &address, CKey& vchPrivKeyOut) const;
+    bool getPrivKey(const CTxDestination& dest, CKey& vchPrivKeyOut) const;
+	
+	uint64_t getKeyUseCount(const CKeyID &address) const;
+	std::pair<size_t,size_t> getKeyUseCount(const CTxDestination &address) const;
+	QString getAddressUseCountString(QString const & address) const;
+	
+	bool setKeyUseCount(const CKeyID &address, uint64_t use_count);
+	
     void getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs);
     bool isSpent(const COutPoint& outpoint) const;
-    void listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const;
+    void listCoins(std::map<QString, std::vector<COutput> >& mapCoins, bool fOnlyBitcoins = false) const;
 
     bool isLockedCoin(uint256 hash, unsigned int n) const;
     void lockCoin(COutPoint& output);
@@ -219,6 +228,13 @@ public:
     OutputType getDefaultAddressType() const;
 
     int getDefaultConfirmTarget() const;
+	
+    CAmount GetBitcoinBalance();
+    std::map<CTxDestination, std::vector<COutput>> ListBitcoins() const;
+    bool ImportBitcoinKey(CKey const & key, QString const & strAccount, QString & serror);
+    void RescanBitcoins();
+
+    QString getAccountAddress(QString const & strAccount);
 
 private:
     CWallet *wallet;

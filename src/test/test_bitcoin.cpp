@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -36,12 +37,6 @@ FastRandomContext insecure_rand_ctx(insecure_rand_seed);
 
 extern bool fPrintToConsole;
 extern void noui_connect();
-
-std::ostream& operator<<(std::ostream& os, const uint256& num)
-{
-    os << num.ToString();
-    return os;
-}
 
 BasicTestingSetup::BasicTestingSetup(const std::string& chainName)
 {
@@ -122,7 +117,7 @@ TestChain100Setup::TestChain100Setup() : TestingSetup(CBaseChainParams::REGTEST)
     // TODO: fix the code to support SegWit blocks.
     UpdateVersionBitsParameters(Consensus::DEPLOYMENT_SEGWIT, 0, Consensus::BIP9Deployment::NO_TIMEOUT);
     // Generate a 100-block chain:
-    coinbaseKey.MakeNewKey(true);
+	coinbaseKey.MakeNewKey(chainKeyType);
     CScript scriptPubKey = CScript() <<  ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
     for (int i = 0; i < COINBASE_MATURITY; i++)
     {
@@ -154,7 +149,10 @@ TestChain100Setup::CreateAndProcessBlock(const std::vector<CMutableTransaction>&
         IncrementExtraNonce(&block, chainActive.Tip(), extraNonce);
     }
 
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, chainparams.GetConsensus())) ++block.nNonce;
+    // TODO: Generate Equihash solution if applicable.
+    while (!CheckProofOfWork(block.GetHash(), block.nBits, false, chainparams.GetConsensus())) {
+        block.nNonce = ArithToUint256(UintToArith256(block.nNonce) + 1);
+    }
 
     std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(block);
     ProcessNewBlock(chainparams, shared_pblock, true, nullptr);
@@ -166,7 +164,6 @@ TestChain100Setup::CreateAndProcessBlock(const std::vector<CMutableTransaction>&
 TestChain100Setup::~TestChain100Setup()
 {
 }
-
 
 CTxMemPoolEntry TestMemPoolEntryHelper::FromTx(const CMutableTransaction &tx) {
     CTransaction txn(tx);

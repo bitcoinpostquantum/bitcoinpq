@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -119,6 +120,17 @@ template<typename T>
 inline std::string HexStr(const T& vch, bool fSpaces=false)
 {
     return HexStr(vch.begin(), vch.end(), fSpaces);
+}
+
+inline std::string ShortStr(std::string const & s, size_t max_len = 64)
+{
+	if (s.size() <= max_len)
+		return s;
+
+	if (max_len < 8)
+		max_len = 8;
+
+	return s.substr(0, max_len/2-2) + " .. " + s.substr(s.size()-(max_len/2-2));
 }
 
 /**

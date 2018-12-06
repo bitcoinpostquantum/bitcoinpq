@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,7 +17,49 @@ typedef std::vector<unsigned char> valtype;
 bool fAcceptDatacarrier = DEFAULT_ACCEPT_DATACARRIER;
 unsigned nMaxDatacarrierBytes = MAX_OP_RETURN_RELAY;
 
-CScriptID::CScriptID(const CScript& in) : uint160(Hash160(in.begin(), in.end())) {}
+const static int DEFAULT_SCRIPT_VERSION = 1;
+
+CScriptID::CScriptID(const CScript& in, int version) 
+{
+    if (version < 0)
+        version = DEFAULT_SCRIPT_VERSION;
+    
+    if (version == 0)
+    {
+        *this = Hash160(in.begin(), in.end());
+    } 
+    else 
+    if (version == 1)
+    {
+        *this = Hash160v1(in.begin(), in.end());
+    } else
+    {
+        // not implemented
+        assert(false);
+    }
+}
+
+CScriptID::CScriptID(const WitnessV0ScriptHash& in)
+{
+    CRIPEMD160 hasher;
+    hasher.Write(in.begin(), 32).Finalize(begin());
+}
+
+CScriptID::CScriptID(const WitnessV1ScriptHash& in)
+{
+    CRIPEMD160 hasher;
+    hasher.Write(in.begin(), 32).Finalize(begin());
+}
+
+WitnessV0ScriptHash::WitnessV0ScriptHash(const CScript& script)
+{
+    CSHA256().Write(&script[0], script.size()).Finalize(begin());
+}
+
+WitnessV1ScriptHash::WitnessV1ScriptHash(const CScript& script)
+   : uint256(bpqcrypto::hash256_shake128(&script.begin()[0], script.size())) 
+{
+}
 
 const char* GetTxnOutputType(txnouttype t)
 {
@@ -30,12 +73,14 @@ const char* GetTxnOutputType(txnouttype t)
     case TX_NULL_DATA: return "nulldata";
     case TX_WITNESS_V0_KEYHASH: return "witness_v0_keyhash";
     case TX_WITNESS_V0_SCRIPTHASH: return "witness_v0_scripthash";
+    case TX_WITNESS_V1_SCRIPTHASH: return "witness_v1_scripthash";
     case TX_WITNESS_UNKNOWN: return "witness_unknown";
     }
     return nullptr;
 }
 
-bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::vector<unsigned char> >& vSolutionsRet)
+bool Solver(const CScript& scriptPubKey, 
+        txnouttype& typeRet, std::vector<std::vector<unsigned char> >& vSolutionsRet)
 {
     // Templates
     static std::multimap<txnouttype, CScript> mTemplates;
@@ -43,12 +88,14 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::v
     {
         // Standard tx, sender provides pubkey, receiver adds signature
         mTemplates.insert(std::make_pair(TX_PUBKEY, CScript() << OP_PUBKEY << OP_CHECKSIG));
+        mTemplates.insert(std::make_pair(TX_PUBKEY, CScript() << OP_PUBKEY << OP_CHECKSIGVERIFY));
 
         // Bitcoin address tx, sender provides hash of pubkey, receiver provides signature and pubkey
         mTemplates.insert(std::make_pair(TX_PUBKEYHASH, CScript() << OP_DUP << OP_HASH160 << OP_PUBKEYHASH << OP_EQUALVERIFY << OP_CHECKSIG));
 
         // Sender provides N pubkeys, receivers provides M signatures
         mTemplates.insert(std::make_pair(TX_MULTISIG, CScript() << OP_SMALLINTEGER << OP_PUBKEYS << OP_SMALLINTEGER << OP_CHECKMULTISIG));
+        mTemplates.insert(std::make_pair(TX_MULTISIG, CScript() << OP_SMALLINTEGER << OP_PUBKEYS << OP_SMALLINTEGER << OP_CHECKMULTISIGVERIFY));
     }
 
     vSolutionsRet.clear();
@@ -65,7 +112,8 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::v
 
     int witnessversion;
     std::vector<unsigned char> witnessprogram;
-    if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
+    if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) 
+    {
         if (witnessversion == 0 && witnessprogram.size() == 20) {
             typeRet = TX_WITNESS_V0_KEYHASH;
             vSolutionsRet.push_back(witnessprogram);
@@ -73,6 +121,11 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::v
         }
         if (witnessversion == 0 && witnessprogram.size() == 32) {
             typeRet = TX_WITNESS_V0_SCRIPTHASH;
+            vSolutionsRet.push_back(witnessprogram);
+            return true;
+        }
+        if (witnessversion == 1 && witnessprogram.size() == 32) {
+            typeRet = TX_WITNESS_V1_SCRIPTHASH;
             vSolutionsRet.push_back(witnessprogram);
             return true;
         }
@@ -132,7 +185,7 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::v
             // Template matching opcodes:
             if (opcode2 == OP_PUBKEYS)
             {
-                while (vch1.size() >= 33 && vch1.size() <= 65)
+                while (bpqcrypto::check_pubkey(vch1.data(), vch1.size()))
                 {
                     vSolutionsRet.push_back(vch1);
                     if (!script1.GetOp(pc1, opcode1, vch1))
@@ -146,7 +199,7 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::v
 
             if (opcode2 == OP_PUBKEY)
             {
-                if (vch1.size() < 33 || vch1.size() > 65)
+                if (!bpqcrypto::check_pubkey(vch1.data(), vch1.size()))
                     break;
                 vSolutionsRet.push_back(vch1);
             }
@@ -215,6 +268,11 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
         std::copy(vSolutions[0].begin(), vSolutions[0].end(), hash.begin());
         addressRet = hash;
         return true;
+    } else if (whichType == TX_WITNESS_V1_SCRIPTHASH) {
+        WitnessV1ScriptHash hash;
+        std::copy(vSolutions[0].begin(), vSolutions[0].end(), hash.begin());
+        addressRet = hash;
+        return true;
     } else if (whichType == TX_WITNESS_UNKNOWN) {
         WitnessUnknown unk;
         unk.version = vSolutions[0][0];
@@ -224,6 +282,26 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
         return true;
     }
     // Multisig txns have more than one address...
+    return false;
+}
+
+bool ExtractPubKey(const CScript& scriptPubKey, CPubKey& pubKeyOut)
+{
+    std::vector<valtype> vSolutions;
+    txnouttype whichType;
+    if (!Solver(scriptPubKey, whichType, vSolutions))
+        return false;
+
+    if (whichType == TX_PUBKEY)
+    {
+        CPubKey pubKey(vSolutions[0]);
+        if (!pubKey.IsValid())
+            return false;
+
+        pubKeyOut = pubKey;
+        return true;
+    }
+    
     return false;
 }
 
@@ -307,6 +385,13 @@ public:
         return true;
     }
 
+    bool operator()(const WitnessV1ScriptHash& id) const
+    {
+        script->clear();
+        *script << OP_1 << ToByteVector(id);
+        return true;
+    }
+
     bool operator()(const WitnessUnknown& id) const
     {
         script->clear();
@@ -340,24 +425,107 @@ CScript GetScriptForMultisig(int nRequired, const std::vector<CPubKey>& keys)
     return script;
 }
 
-CScript GetScriptForWitness(const CScript& redeemscript)
+CTxDestination GetDestinationForWitness(const CScript& redeemscript)
 {
-    CScript ret;
-
     txnouttype typ;
     std::vector<std::vector<unsigned char> > vSolutions;
-    if (Solver(redeemscript, typ, vSolutions)) {
-        if (typ == TX_PUBKEY) {
-            return GetScriptForDestination(WitnessV0KeyHash(Hash160(vSolutions[0].begin(), vSolutions[0].end())));
-        } else if (typ == TX_PUBKEYHASH) {
-            return GetScriptForDestination(WitnessV0KeyHash(vSolutions[0]));
+    if (Solver(redeemscript, typ, vSolutions)) 
+    {
+        if (typ == TX_PUBKEY) 
+        {
+            if (bpqcrypto::is_xmss_pubkey(vSolutions[0]))
+            {
+                return WitnessV1ScriptHash(redeemscript);
+            }
+            else
+            {
+                return WitnessV0KeyHash(Hash160(vSolutions[0].begin(), vSolutions[0].end()));
+            }
+        } 
+        else if (typ == TX_PUBKEYHASH) 
+        {
+            return WitnessV0KeyHash(vSolutions[0]);
+        } 
+        else if (typ == TX_MULTISIG)
+        {
+            int pub_N = vSolutions.back()[0];
+            if (pub_N + 2 == (int)vSolutions.size())
+            {
+                int v0_n = 0;
+                int v1_n = 0;
+                for (int i = 0; i < pub_N; ++i)
+                {
+                    if (bpqcrypto::is_xmss_pubkey(vSolutions[i+1]))
+                        ++v1_n;
+                    else
+                    if (bpqcrypto::is_ecdsa_pubkey(vSolutions[i+1]))
+                        ++v0_n;
+                }
+
+                if (v0_n == pub_N)
+                    return WitnessV0ScriptHash(redeemscript);
+
+                if (v1_n == pub_N)
+                    return WitnessV1ScriptHash(redeemscript);
+            }
         }
     }
-    uint256 hash;
-    CSHA256().Write(&redeemscript[0], redeemscript.size()).Finalize(hash.begin());
-    return GetScriptForDestination(WitnessV0ScriptHash(hash));
+    
+    return WitnessV1ScriptHash(redeemscript);
+}
+
+CScript GetScriptForWitness(const CScript& redeemscript)
+{
+    return GetScriptForDestination(GetDestinationForWitness(redeemscript));
 }
 
 bool IsValidDestination(const CTxDestination& dest) {
     return dest.which() != 0;
+}
+
+bool IsDestinationBPQ(CTxDestination const &dest)
+{
+    return boost::get<WitnessV1ScriptHash>(&dest) != nullptr;
+}
+
+int DetectScriptVersion(const CScript& redeemscript)
+{
+    txnouttype typ;
+    std::vector<std::vector<unsigned char> > vSolutions;
+    if (Solver(redeemscript, typ, vSolutions)) 
+    {
+        if (typ == TX_PUBKEY)
+        {
+            if (bpqcrypto::is_xmss_pubkey(vSolutions[0]))
+                return 1;
+
+            else if (bpqcrypto::is_ecdsa_pubkey(vSolutions[0]))
+                return 0;
+        }
+        else if (typ == TX_MULTISIG)
+        {
+            int count_v0 = 0;
+            int count_v1 = 0;
+            
+            for (size_t i = 1; i+1 < vSolutions.size(); ++i)
+            {
+                if (bpqcrypto::is_xmss_pubkey(vSolutions[i]))
+                    ++count_v1;
+
+                else if (bpqcrypto::is_ecdsa_pubkey(vSolutions[i]))
+                    ++count_v0;
+            }
+           
+            if (count_v0 > 0 && count_v1 > 0)
+                return -1;
+            
+            if (count_v0 > 0)
+                return 0;
+            
+            if (count_v1 > 0)
+                return 1;
+        }
+    }
+    
+    return -1;
 }

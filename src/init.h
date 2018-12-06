@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -58,8 +59,8 @@ bool AppInitMain();
 
 /** The help message mode determines what help message to show */
 enum HelpMessageMode {
-    HMM_BITCOIND,
-    HMM_BITCOIN_QT
+    HMM_BPQD,
+    HMM_BPQ_QT
 };
 
 /** Help for options shared between UI and daemon (for -help) */

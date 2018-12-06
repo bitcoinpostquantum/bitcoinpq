@@ -1,11 +1,12 @@
 // Copyright (c) 2016-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <bench/bench.h>
 #include <key.h>
 #if defined(HAVE_CONSENSUS_LIB)
-#include <script/bitcoinconsensus.h>
+#include <script/bpqconsensus.h>
 #endif
 #include <script/script.h>
 #include <script/sign.h>
@@ -62,7 +63,7 @@ static void VerifyScriptBench(benchmark::State& state)
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
         }
     };
-    key.Set(vchKey.begin(), vchKey.end(), false);
+    key.SetLegacy(vchKey.begin(), vchKey.end(), false);
     CPubKey pubkey = key.GetPubKey();
     uint160 pubkeyHash;
     CHash160().Write(pubkey.begin(), pubkey.size()).Finalize(pubkeyHash.begin());
@@ -75,7 +76,10 @@ static void VerifyScriptBench(benchmark::State& state)
     CMutableTransaction txSpend = BuildSpendingTransaction(scriptSig, txCredit);
     CScriptWitness& witness = txSpend.vin[0].scriptWitness;
     witness.stack.emplace_back();
-    key.Sign(SignatureHash(witScriptPubkey, txSpend, 0, SIGHASH_ALL, txCredit.vout[0].nValue, SIGVERSION_WITNESS_V0), witness.stack.back(), 0);
+	
+    key.SignHash(SignatureHash(witScriptPubkey, txSpend, 0, SIGHASH_ALL, 
+                txCredit.vout[0].nValue, SIGVERSION_WITNESS_V0), 
+            witness.stack.back(), 0);
     witness.stack.back().push_back(static_cast<unsigned char>(SIGHASH_ALL));
     witness.stack.push_back(ToByteVector(pubkey));
 

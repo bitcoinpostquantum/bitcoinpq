@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -304,7 +305,7 @@ CTransactionRef RandomOrphan()
 BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
 {
     CKey key;
-    key.MakeNewKey(true);
+    key.MakeNewKey(CKeyType::ECDSA_COMPRESSED);
     CBasicKeyStore keystore;
     keystore.AddKey(key);
 

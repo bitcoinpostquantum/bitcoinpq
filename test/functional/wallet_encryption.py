@@ -18,6 +18,9 @@ class WalletEncryptionTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
+        self.extra_args = [
+            ["-addresstype=legacy"], 
+        ]
 
     def run_test(self):
         passphrase = "WalletPassphrase"
@@ -64,15 +67,14 @@ class WalletEncryptionTest(BitcoinTestFramework):
         assert_raises_rpc_error(-8, "Timeout cannot be negative.", self.nodes[0].walletpassphrase, passphrase2, -10)
         # Check the timeout
         # Check a time less than the limit
-        MAX_VALUE = 100000000
-        expected_time = int(time.time()) + MAX_VALUE - 600
-        self.nodes[0].walletpassphrase(passphrase2, MAX_VALUE - 600)
+        expected_time = int(time.time()) + (1 << 30) - 600
+        self.nodes[0].walletpassphrase(passphrase2, (1 << 30) - 600)
         actual_time = self.nodes[0].getwalletinfo()['unlocked_until']
         assert_greater_than_or_equal(actual_time, expected_time)
         assert_greater_than(expected_time + 5, actual_time) # 5 second buffer
         # Check a time greater than the limit
-        expected_time = int(time.time()) + MAX_VALUE - 1
-        self.nodes[0].walletpassphrase(passphrase2, MAX_VALUE + 1000)
+        expected_time = int(time.time()) + (1 << 30) - 1
+        self.nodes[0].walletpassphrase(passphrase2, (1 << 33))
         actual_time = self.nodes[0].getwalletinfo()['unlocked_until']
         assert_greater_than_or_equal(actual_time, expected_time)
         assert_greater_than(expected_time + 5, actual_time) # 5 second buffer

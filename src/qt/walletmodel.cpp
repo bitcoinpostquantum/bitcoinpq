@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -193,6 +194,26 @@ bool WalletModel::validateAddress(const QString &address)
 
 WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl)
 {
+    if (transaction.getTransaction()->strFromAccount.empty())
+    {
+        std::vector<COutPoint> vCoinControl;
+        coinControl.ListSelected(vCoinControl);
+        
+        for (auto & outpoint : vCoinControl)
+        {
+            LOCK2(cs_main, wallet->cs_wallet);
+            auto dest = wallet->GetOutputDestination(outpoint);
+            if (IsDestinationBPQ(dest) && IsMine(*wallet, GetScriptForDestination(dest)) == ISMINE_SPENDABLE)
+            {
+                auto it = wallet->mapAddressBook.find(dest);
+                if (it != wallet->mapAddressBook.end() && !it->second.name.empty())
+                {
+                    transaction.getTransaction()->strFromAccount = it->second.name;
+                }
+            }
+        }
+    }
+    
     CAmount total = 0;
     bool fSubtractFeeFromAmount = false;
     QList<SendCoinsRecipient> recipients = transaction.getRecipients();
@@ -202,7 +223,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
     {
         return OK;
     }
-
+    
     QSet<QString> setAddress; // Used to detect duplicates
     int nAddresses = 0;
 
@@ -246,7 +267,8 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
             setAddress.insert(rcp.address);
             ++nAddresses;
 
-            CScript scriptPubKey = GetScriptForDestination(DecodeDestination(rcp.address.toStdString()));
+            CScript scriptPubKey = GetScriptForDestination(
+					DecodeDestination(rcp.address.toStdString()));
             CRecipient recipient = {scriptPubKey, rcp.amount, rcp.fSubtractFeeFromAmount};
             vecSend.push_back(recipient);
 
@@ -570,6 +592,132 @@ bool WalletModel::getPrivKey(const CKeyID &address, CKey& vchPrivKeyOut) const
     return wallet->GetKey(address, vchPrivKeyOut);
 }
 
+bool WalletModel::getPrivKey(const CTxDestination& dest, CKey& vchPrivKeyOut) const
+{
+    return wallet->GetKey(dest, vchPrivKeyOut);
+}
+
+uint64_t WalletModel::getKeyUseCount(const CKeyID &address) const
+{
+	return wallet->GetKeyUseCount(address);
+}
+
+QString WalletModel::getAddressUseCountString(QString const & address) const
+{
+	auto dest = DecodeDestination(address.toStdString());
+    
+    if (IsDestinationBPQ(dest))
+    {
+        auto use_count = getKeyUseCount(dest);
+        return QString::number(use_count.first) + QString("/") + QString::number(use_count.second);
+    } else
+    {
+        return ("-");
+    }
+}
+
+std::pair<size_t,size_t> WalletModel::getKeyUseCount(const CTxDestination &address) const
+{
+	return wallet->GetKeyUseCount(address);
+}
+
+QString WalletModel::getAccountAddress(QString const & strAccount)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+
+	CTxDestination dest;
+	if (!wallet->GetAccountDestination(dest, strAccount.toStdString(), false /* bForceNew*/))
+		return {};
+
+    return QString::fromStdString( EncodeDestination(dest) );
+}
+
+CAmount WalletModel::GetBitcoinBalance()
+{
+	return wallet->GetBitcoinBalance();
+}
+
+std::map<CTxDestination, std::vector<COutput>> WalletModel::ListBitcoins() const
+{
+	return wallet->ListCoins(true);
+}
+
+void WalletModel::RescanBitcoins()
+{
+    WalletRescanReserver reserver(wallet);   
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+
+        EnsureWalletIsUnlocked(wallet);
+
+        if (!reserver.reserve()) {
+            return;
+        }
+    }
+	
+	wallet->RescanFromTime(TIMESTAMP_MIN, reserver, true /* update */, false);
+}
+
+bool WalletModel::ImportBitcoinKey(CKey const & key, QString const & strAccount, QString & serror)
+{
+    bool fRescan = false;
+    WalletRescanReserver reserver(wallet);
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+	
+        EnsureWalletIsUnlocked(wallet);
+		
+        if (fRescan && !reserver.reserve()) {
+            serror = tr("Wallet is currently rescanning. Abort existing rescan or wait.");
+            return false;
+        }
+	
+        CPubKey pubkey = key.GetPubKey();
+
+        if (!key.VerifyPubKey(pubkey))
+        {
+                serror = tr("Invalid key.");
+                return false;
+        }
+
+        CKeyID vchAddress = pubkey.GetID();
+
+        wallet->MarkDirty();
+
+        // We don't know which corresponding address will be used; label them all
+        for (const auto& dest : GetAllDestinationsForKey(pubkey)) {
+            wallet->SetAddressBook(dest, strAccount.toStdString(), "receive");
+        }
+
+        // Don't throw error in case a key is already there
+        if (wallet->HaveKey(vchAddress)) {
+                return true;
+        }
+
+        // whenever a key is imported, we need to scan the whole chain
+        wallet->UpdateTimeFirstKey(1);
+        wallet->mapKeyMetadata[vchAddress].nCreateTime = 1;
+
+        if (!wallet->AddKeyPubKey(key, pubkey)) {
+                serror = tr("Failed to add key to wallet.");
+                return false;
+        }
+
+        wallet->LearnAllRelatedScripts(pubkey);
+    }
+
+	if (fRescan) {
+		wallet->RescanFromTime(TIMESTAMP_MIN, reserver, true /* update */, false);
+	}
+	
+    return true;
+}
+
+bool WalletModel::setKeyUseCount(const CKeyID &address, uint64_t use_count)
+{
+	return wallet->SetKeyUseCount(address, use_count);
+}
+
 // returns a list of COutputs from COutPoints
 void WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs)
 {
@@ -592,9 +740,9 @@ bool WalletModel::isSpent(const COutPoint& outpoint) const
 }
 
 // AvailableCoins + LockedCoins grouped by wallet address (put change in one group with wallet address)
-void WalletModel::listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const
+void WalletModel::listCoins(std::map<QString, std::vector<COutput> >& mapCoins, bool fOnlyBitcoins) const
 {
-    for (auto& group : wallet->ListCoins()) {
+    for (auto& group : wallet->ListCoins(fOnlyBitcoins)) {
         auto& resultGroup = mapCoins[QString::fromStdString(EncodeDestination(group.first))];
         for (auto& coin : group.second) {
             resultGroup.emplace_back(std::move(coin));

@@ -823,11 +823,7 @@
         <source>Set SSL root certificates for payment request (default: -system-)</source>
         <translation>Définir les certificats SSL racines pour les requêtes de paiement (défaut:-système-)</translation>
     </message>
-    <message>
-        <source>Reset all settings changed in the GUI</source>
-        <translation>Réinitialiser tous les paramètres modifiés dans le GUI</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>Intro</name>
     <message>
@@ -849,18 +845,6 @@
     <message>
         <source>Bitcoin</source>
         <translation>Bitcoin</translation>
-    </message>
-    <message>
-        <source>At least %1 GB of data will be stored in this directory, and it will grow over time.</source>
-        <translation>Environ %1 GB de données seront stockées dans ce répertoire, et cela augmentera au cours du temps.</translation>
-    </message>
-    <message>
-        <source>Approximately %1 GB of data will be stored in this directory.</source>
-        <translation>Environ %1 GB de données seront stockées dans ce répertoire.</translation>
-    </message>
-    <message>
-        <source>The wallet will also be stored in this directory.</source>
-        <translation>Le porte-monnaie sera aussi stocké dans ce répertoire.</translation>
     </message>
     <message>
         <source>Error: Specified data directory "%1" cannot be created.</source>

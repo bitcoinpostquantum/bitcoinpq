@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -35,16 +36,19 @@ bool CoinControlDialog::fSubtractFeeFromAmount = false;
 
 bool CCoinControlWidgetItem::operator<(const QTreeWidgetItem &other) const {
     int column = treeWidget()->sortColumn();
-    if (column == CoinControlDialog::COLUMN_AMOUNT || column == CoinControlDialog::COLUMN_DATE || column == CoinControlDialog::COLUMN_CONFIRMATIONS)
+    if (column == CoinControlDialog::COLUMN_AMOUNT || 
+		column == CoinControlDialog::COLUMN_DATE || 
+		column == CoinControlDialog::COLUMN_CONFIRMATIONS)
         return data(column, Qt::UserRole).toLongLong() < other.data(column, Qt::UserRole).toLongLong();
     return QTreeWidgetItem::operator<(other);
 }
 
-CoinControlDialog::CoinControlDialog(const PlatformStyle *_platformStyle, QWidget *parent) :
+CoinControlDialog::CoinControlDialog(const PlatformStyle *_platformStyle, bool fBitcoinOnly, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::CoinControlDialog),
     model(0),
-    platformStyle(_platformStyle)
+    platformStyle(_platformStyle),
+	fBitcoinOnly(fBitcoinOnly)
 {
     ui->setupUi(this);
 
@@ -52,9 +56,9 @@ CoinControlDialog::CoinControlDialog(const PlatformStyle *_platformStyle, QWidge
     QAction *copyAddressAction = new QAction(tr("Copy address"), this);
     QAction *copyLabelAction = new QAction(tr("Copy label"), this);
     QAction *copyAmountAction = new QAction(tr("Copy amount"), this);
-             copyTransactionHashAction = new QAction(tr("Copy transaction ID"), this);  // we need to enable/disable this
-             lockAction = new QAction(tr("Lock unspent"), this);                        // we need to enable/disable this
-             unlockAction = new QAction(tr("Unlock unspent"), this);                    // we need to enable/disable this
+	copyTransactionHashAction = new QAction(tr("Copy transaction ID"), this);  // we need to enable/disable this
+	lockAction = new QAction(tr("Lock unspent"), this);                        // we need to enable/disable this
+	unlockAction = new QAction(tr("Unlock unspent"), this);                    // we need to enable/disable this
 
     // context menu
     contextMenu = new QMenu(this);
@@ -125,11 +129,12 @@ CoinControlDialog::CoinControlDialog(const PlatformStyle *_platformStyle, QWidge
     // see https://github.com/bitcoin/bitcoin/issues/5716
     ui->treeWidget->headerItem()->setText(COLUMN_CHECKBOX, QString());
 
-    ui->treeWidget->setColumnWidth(COLUMN_CHECKBOX, 84);
+    ui->treeWidget->setColumnWidth(COLUMN_CHECKBOX, 60);
     ui->treeWidget->setColumnWidth(COLUMN_AMOUNT, 110);
-    ui->treeWidget->setColumnWidth(COLUMN_LABEL, 190);
+    ui->treeWidget->setColumnWidth(COLUMN_LABEL, 170);
     ui->treeWidget->setColumnWidth(COLUMN_ADDRESS, 320);
     ui->treeWidget->setColumnWidth(COLUMN_DATE, 130);
+    ui->treeWidget->setColumnWidth(COLUMN_USECOUNT, 90);
     ui->treeWidget->setColumnWidth(COLUMN_CONFIRMATIONS, 110);
     ui->treeWidget->setColumnHidden(COLUMN_TXHASH, true);         // store transaction hash in this column, but don't show it
     ui->treeWidget->setColumnHidden(COLUMN_VOUT_INDEX, true);     // store vout index in this column, but don't show it
@@ -142,7 +147,8 @@ CoinControlDialog::CoinControlDialog(const PlatformStyle *_platformStyle, QWidge
     if (settings.contains("nCoinControlMode") && !settings.value("nCoinControlMode").toBool())
         ui->radioTreeMode->click();
     if (settings.contains("nCoinControlSortColumn") && settings.contains("nCoinControlSortOrder"))
-        sortView(settings.value("nCoinControlSortColumn").toInt(), ((Qt::SortOrder)settings.value("nCoinControlSortOrder").toInt()));
+        sortView(settings.value("nCoinControlSortColumn").toInt(), 
+		((Qt::SortOrder)settings.value("nCoinControlSortOrder").toInt()));
 }
 
 CoinControlDialog::~CoinControlDialog()
@@ -480,7 +486,7 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
             CKeyID *keyid = boost::get<CKeyID>(&address);
             if (keyid && model->getPubKey(*keyid, pubkey))
             {
-                nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
+                nBytesInputs += 115 + pubkey.size(); // IsCompressed() ? 148 : 180); // BPQ
             }
             else
                 nBytesInputs += 148; // in all error cases, simply assume 148 here
@@ -621,7 +627,7 @@ void CoinControlDialog::updateView()
     int nDisplayUnit = model->getOptionsModel()->getDisplayUnit();
 
     std::map<QString, std::vector<COutput> > mapCoins;
-    model->listCoins(mapCoins);
+    model->listCoins(mapCoins, fBitcoinOnly);
 
     for (const std::pair<QString, std::vector<COutput>>& coins : mapCoins) {
         CCoinControlWidgetItem *itemWalletAddress = new CCoinControlWidgetItem();
@@ -661,9 +667,11 @@ void CoinControlDialog::updateView()
             // address
             CTxDestination outputAddress;
             QString sAddress = "";
+			std::pair<size_t,size_t> nUseCount{0,0};
             if(ExtractDestination(out.tx->tx->vout[out.i].scriptPubKey, outputAddress))
             {
                 sAddress = QString::fromStdString(EncodeDestination(outputAddress));
+				nUseCount = model->getKeyUseCount(outputAddress);
 
                 // if listMode or change => show bitcoin address. In tree mode, address is not shown again for direct wallet address outputs
                 if (!treeMode || (!(sAddress == sWalletAddress)))
@@ -693,6 +701,11 @@ void CoinControlDialog::updateView()
             itemOutput->setText(COLUMN_DATE, GUIUtil::dateTimeStr(out.tx->GetTxTime()));
             itemOutput->setData(COLUMN_DATE, Qt::UserRole, QVariant((qlonglong)out.tx->GetTxTime()));
 
+            // usecount
+			QString strUseCount = QString::number(nUseCount.first) + QString("/") + QString::number(nUseCount.second);
+            itemOutput->setText(COLUMN_USECOUNT, strUseCount);
+            itemOutput->setData(COLUMN_USECOUNT, Qt::UserRole, QVariant((qlonglong)nUseCount.first));
+			
             // confirmations
             itemOutput->setText(COLUMN_CONFIRMATIONS, QString::number(out.nDepth));
             itemOutput->setData(COLUMN_CONFIRMATIONS, Qt::UserRole, QVariant((qlonglong)out.nDepth));

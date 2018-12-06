@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -23,7 +24,7 @@
 
 #include <prevector.h>
 
-static const unsigned int MAX_SIZE = 0x02000000;
+static const unsigned int MAX_SIZE = 0x06000000;
 
 /**
  * Dummy data type to identify deserializing constructors.

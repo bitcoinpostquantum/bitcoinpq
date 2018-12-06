@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -37,13 +38,19 @@ CAmount GetDustThreshold(const CTxOut& txout, const CFeeRate& dustRelayFeeIn)
     size_t nSize = GetSerializeSize(txout, SER_DISK, 0);
     int witnessversion = 0;
     std::vector<unsigned char> witnessprogram;
+	
+	//size_t unlockingScriptSize = 107; // for ecdsa script
+	size_t unlockingScriptSize = 3040;  // BPQ
+	
+	size_t unlockingScriptLenSize = unlockingScriptSize > 127 ? 2 : 1;
 
     if (txout.scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
         // sum the sizes of the parts of a transaction input
         // with 75% segwit discount applied to the script size.
-        nSize += (32 + 4 + 1 + (107 / WITNESS_SCALE_FACTOR) + 4);
+        nSize += 32 + 4 + unlockingScriptLenSize + (unlockingScriptSize / WITNESS_SCALE_FACTOR) + 4;
     } else {
-        nSize += (32 + 4 + 1 + 107 + 4); // the 148 mentioned above
+		// the 148 mentioned above ( for ecdsa )
+        nSize += 32 + 4 + unlockingScriptLenSize + unlockingScriptSize + 4;
     }
 
     return dustRelayFeeIn.GetFee(nSize);
@@ -73,7 +80,10 @@ bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType, const bool w
                (!fAcceptDatacarrier || scriptPubKey.size() > nMaxDatacarrierBytes))
           return false;
 
-    else if (!witnessEnabled && (whichType == TX_WITNESS_V0_KEYHASH || whichType == TX_WITNESS_V0_SCRIPTHASH))
+    else if (!witnessEnabled && (
+            whichType == TX_WITNESS_V0_KEYHASH || 
+            whichType == TX_WITNESS_V0_SCRIPTHASH ||
+            whichType == TX_WITNESS_V1_SCRIPTHASH))
         return false;
 
     return whichType != TX_NONSTANDARD && whichType != TX_WITNESS_UNKNOWN;
@@ -105,7 +115,10 @@ bool IsStandardTx(const CTransaction& tx, std::string& reason, const bool witnes
         // future-proofing. That's also enough to spend a 20-of-20
         // CHECKMULTISIG scriptPubKey, though such a scriptPubKey is not
         // considered standard.
-        if (txin.scriptSig.size() > 1650) {
+		
+		static const size_t MAX_TXIN_SIZE = 1650; // bitcoin
+		
+        if (txin.scriptSig.size() > MAX_TXIN_SIZE) {
             reason = "scriptsig-size";
             return false;
         }

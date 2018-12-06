@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -26,28 +27,31 @@ static CBlock BuildBlockTestCase() {
     tx.vin[0].scriptSig.resize(10);
     tx.vout.resize(1);
     tx.vout[0].nValue = 42;
-
+    
     block.vtx.resize(3);
     block.vtx[0] = MakeTransactionRef(tx);
-    block.nVersion = 42;
+    block.nMinorVersion = 42;
     block.hashPrevBlock = InsecureRand256();
     block.nBits = 0x207fffff;
-
+    
     tx.vin[0].prevout.hash = InsecureRand256();
     tx.vin[0].prevout.n = 0;
     block.vtx[1] = MakeTransactionRef(tx);
-
+    
     tx.vin.resize(10);
     for (size_t i = 0; i < tx.vin.size(); i++) {
         tx.vin[i].prevout.hash = InsecureRand256();
         tx.vin[i].prevout.n = 0;
     }
     block.vtx[2] = MakeTransactionRef(tx);
-
+    
     bool mutated;
     block.hashMerkleRoot = BlockMerkleRoot(block, &mutated);
     assert(!mutated);
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, Params().GetConsensus())) ++block.nNonce;
+    // TODO(h4x3rotab): Generate Equihash solution if applicable.
+    while (!CheckProofOfWork(block.GetHash(), block.nBits, false, Params().GetConsensus())) {
+        block.nNonce = ArithToUint256(UintToArith256(block.nNonce) + 1);
+    }
     return block;
 }
 
@@ -60,40 +64,39 @@ BOOST_AUTO_TEST_CASE(SimpleRoundTripTest)
     CTxMemPool pool;
     TestMemPoolEntryHelper entry;
     CBlock block(BuildBlockTestCase());
-
+    
     pool.addUnchecked(block.vtx[2]->GetHash(), entry.FromTx(*block.vtx[2]));
-    LOCK(pool.cs);
     BOOST_CHECK_EQUAL(pool.mapTx.find(block.vtx[2]->GetHash())->GetSharedTx().use_count(), SHARED_TX_OFFSET + 0);
-
+    
     // Do a simple ShortTxIDs RT
     {
         CBlockHeaderAndShortTxIDs shortIDs(block, true);
-
+        
         CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
         stream << shortIDs;
-
+        
         CBlockHeaderAndShortTxIDs shortIDs2;
         stream >> shortIDs2;
-
+        
         PartiallyDownloadedBlock partialBlock(&pool);
         BOOST_CHECK(partialBlock.InitData(shortIDs2, extra_txn) == READ_STATUS_OK);
         BOOST_CHECK( partialBlock.IsTxAvailable(0));
         BOOST_CHECK(!partialBlock.IsTxAvailable(1));
         BOOST_CHECK( partialBlock.IsTxAvailable(2));
-
+        
         BOOST_CHECK_EQUAL(pool.mapTx.find(block.vtx[2]->GetHash())->GetSharedTx().use_count(), SHARED_TX_OFFSET + 1);
-
+        
         size_t poolSize = pool.size();
         pool.removeRecursive(*block.vtx[2]);
         BOOST_CHECK_EQUAL(pool.size(), poolSize - 1);
-
+        
         CBlock block2;
         {
             PartiallyDownloadedBlock tmp = partialBlock;
             BOOST_CHECK(partialBlock.FillBlock(block2, {}) == READ_STATUS_INVALID); // No transactions
             partialBlock = tmp;
         }
-
+        
         // Wrong transaction
         {
             PartiallyDownloadedBlock tmp = partialBlock;
@@ -102,7 +105,7 @@ BOOST_AUTO_TEST_CASE(SimpleRoundTripTest)
         }
         bool mutated;
         BOOST_CHECK(block.hashMerkleRoot != BlockMerkleRoot(block2, &mutated));
-
+        
         CBlock block3;
         BOOST_CHECK(partialBlock.FillBlock(block3, {block.vtx[1]}) == READ_STATUS_OK);
         BOOST_CHECK_EQUAL(block.GetHash().ToString(), block3.GetHash().ToString());
@@ -285,14 +288,18 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRoundTripTest)
     CBlock block;
     block.vtx.resize(1);
     block.vtx[0] = MakeTransactionRef(std::move(coinbase));
-    block.nVersion = 42;
+    block.nMinorVersion = 42;
     block.hashPrevBlock = InsecureRand256();
     block.nBits = 0x207fffff;
 
     bool mutated;
     block.hashMerkleRoot = BlockMerkleRoot(block, &mutated);
     assert(!mutated);
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, Params().GetConsensus())) ++block.nNonce;
+        // TODO: Generate Equihash solution if applicable.
+    // TODO(h4x3rotab): Generate Equihash solution if applicable.
+    while (!CheckProofOfWork(block.GetHash(), block.nBits, false, Params().GetConsensus())) {
+        block.nNonce = ArithToUint256(UintToArith256(block.nNonce) + 1);
+    }
 
     // Test simple header round-trip with only coinbase
     {

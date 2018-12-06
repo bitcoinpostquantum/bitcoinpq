@@ -1,4 +1,5 @@
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -147,8 +148,9 @@ bool DecodeHexBlk(CBlock& block, const std::string& strHexBlk)
 {
     if (!IsHex(strHexBlk))
         return false;
-
+    
     std::vector<unsigned char> blockData(ParseHex(strHexBlk));
+
     CDataStream ssBlock(blockData, SER_NETWORK, PROTOCOL_VERSION);
     try {
         ssBlock >> block;
@@ -156,7 +158,7 @@ bool DecodeHexBlk(CBlock& block, const std::string& strHexBlk)
     catch (const std::exception&) {
         return false;
     }
-
+    
     return true;
 }
 

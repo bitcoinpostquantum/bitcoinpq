@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -207,11 +208,15 @@ public:
     uint32_t nStatus;
 
     //! block header
-    int32_t nVersion;
+    uint8_t nMajorVersion;
+    int32_t nMinorVersion;
     uint256 hashMerkleRoot;
+    uint256 hashWitnessMerkleRoot;
+
     uint32_t nTime;
     uint32_t nBits;
-    uint32_t nNonce;
+    uint256  nNonce;
+    std::vector<unsigned char> nSolution;
 
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     int32_t nSequenceId;
@@ -235,11 +240,14 @@ public:
         nSequenceId = 0;
         nTimeMax = 0;
 
-        nVersion       = 0;
+        nMajorVersion  = 0;
+        nMinorVersion       = 0;
         hashMerkleRoot = uint256();
+        hashWitnessMerkleRoot = uint256();
         nTime          = 0;
         nBits          = 0;
-        nNonce         = 0;
+        nNonce         = uint256();
+        nSolution.clear();
     }
 
     CBlockIndex()
@@ -251,11 +259,15 @@ public:
     {
         SetNull();
 
-        nVersion       = block.nVersion;
+        nMajorVersion  = block.nMajorVersion;
+        nMinorVersion  = block.nMinorVersion;
         hashMerkleRoot = block.hashMerkleRoot;
+        hashWitnessMerkleRoot = block.hashWitnessMerkleRoot;
+
         nTime          = block.nTime;
         nBits          = block.nBits;
         nNonce         = block.nNonce;
+        nSolution      = block.nSolution;
     }
 
     CDiskBlockPos GetBlockPos() const {
@@ -279,13 +291,17 @@ public:
     CBlockHeader GetBlockHeader() const
     {
         CBlockHeader block;
-        block.nVersion       = nVersion;
+        block.nMajorVersion  = nMajorVersion;
+        block.nMinorVersion  = nMinorVersion;
         if (pprev)
             block.hashPrevBlock = pprev->GetBlockHash();
         block.hashMerkleRoot = hashMerkleRoot;
+        block.hashWitnessMerkleRoot = hashWitnessMerkleRoot;
+
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        block.nSolution      = nSolution;
         return block;
     }
 
@@ -387,7 +403,7 @@ public:
         int _nVersion = s.GetVersion();
         if (!(s.GetType() & SER_GETHASH))
             READWRITE(VARINT(_nVersion));
-
+        
         READWRITE(VARINT(nHeight));
         READWRITE(VARINT(nStatus));
         READWRITE(VARINT(nTx));
@@ -397,25 +413,31 @@ public:
             READWRITE(VARINT(nDataPos));
         if (nStatus & BLOCK_HAVE_UNDO)
             READWRITE(VARINT(nUndoPos));
-
+        
         // block header
-        READWRITE(this->nVersion);
+        READWRITE(this->nMajorVersion);
+        READWRITE(this->nMinorVersion);
         READWRITE(hashPrev);
         READWRITE(hashMerkleRoot);
+        READWRITE(hashWitnessMerkleRoot);
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
+        READWRITE(nSolution);
     }
 
     uint256 GetBlockHash() const
     {
         CBlockHeader block;
-        block.nVersion        = nVersion;
+        block.nMajorVersion   = nMajorVersion;
+        block.nMinorVersion   = nMinorVersion;
         block.hashPrevBlock   = hashPrev;
         block.hashMerkleRoot  = hashMerkleRoot;
+        block.hashWitnessMerkleRoot = hashWitnessMerkleRoot;
         block.nTime           = nTime;
         block.nBits           = nBits;
         block.nNonce          = nNonce;
+        block.nSolution       = nSolution;
         return block.GetHash();
     }
 

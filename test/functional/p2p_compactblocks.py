@@ -12,8 +12,7 @@ from test_framework.mininode import *
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import *
 from test_framework.blocktools import create_block, create_coinbase, add_witness_commitment
-from test_framework.script import CScript, OP_TRUE, OP_DROP
-
+from test_framework.script import CScript, OP_TRUE
 
 # TestNode: A peer we use to send messages to bitcoind, and store responses.
 class TestNode(P2PInterface):
@@ -96,7 +95,10 @@ class CompactBlocksTest(BitcoinTestFramework):
         self.num_nodes = 2
         # This test was written assuming SegWit is activated using BIP9 at height 432 (3x confirmation window).
         # TODO: Rewrite this test to support SegWit being always active.
-        self.extra_args = [["-vbparams=segwit:0:0"], ["-vbparams=segwit:0:999999999999", "-txindex", "-deprecatedrpc=addwitnessaddress"]]
+        self.extra_args = [
+            ["-addresstype=legacy", "-vbparams=segwit:0:0"], 
+            ["-addresstype=legacy", "-vbparams=segwit:0:999999999999", "-txindex", "-deprecatedrpc=addwitnessaddress"]
+        ]
         self.utxos = []
 
     def build_block_on_tip(self, node, segwit=False):
@@ -424,7 +426,7 @@ class CompactBlocksTest(BitcoinTestFramework):
         for i in range(num_transactions):
             tx = CTransaction()
             tx.vin.append(CTxIn(COutPoint(utxo[0], utxo[1]), b''))
-            tx.vout.append(CTxOut(utxo[2] - 1000, CScript([OP_TRUE, OP_DROP] * 15 + [OP_TRUE])))
+            tx.vout.append(CTxOut(utxo[2] - 1000, CScript([OP_TRUE])))
             tx.rehash()
             utxo = [tx.sha256, 0, tx.vout[0].nValue]
             block.vtx.append(tx)

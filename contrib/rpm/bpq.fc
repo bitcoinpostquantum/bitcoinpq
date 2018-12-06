@@ -1,0 +1,8 @@
+/usr/bin/bpq-cli		--	gen_context(system_u:object_r:bpq_exec_t,s0)
+/usr/sbin/bpqd		--	gen_context(system_u:object_r:bpq_exec_t,s0)
+/usr/lib(64)?/bpq/bpqd		--	gen_context(system_u:object_r:bpq_exec_t,s0)
+
+/etc/bpq(/.*)?		gen_context(system_u:object_r:bpq_conf_t,s0)
+/var/lib/bpq(/.*)?		gen_context(system_u:object_r:bpq_var_lib_t,s0)
+
+(/var)?/run/bpqd(/.*)?   gen_context(system_u:object_r:bpq_var_run_t,s0)

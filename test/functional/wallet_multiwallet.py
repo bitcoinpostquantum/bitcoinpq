@@ -4,7 +4,7 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test multiwallet.
 
-Verify that a bitcoind node can load multiple wallet files
+Verify that a bpqd node can load multiple wallet files
 """
 import os
 import shutil
@@ -55,19 +55,6 @@ class MultiWalletTest(BitcoinTestFramework):
         not_a_dir = wallet_dir('notadir')
         open(not_a_dir, 'a').close()
         self.assert_start_raises_init_error(0, ['-walletdir=' + not_a_dir], 'Error: Specified -walletdir "' + not_a_dir + '" is not a directory')
-
-        self.log.info("Do not allow -zapwallettxes with multiwallet")
-        self.assert_start_raises_init_error(0, ['-zapwallettxes', '-wallet=w1', '-wallet=w2'], "Error: -zapwallettxes is only allowed with a single wallet file")
-        self.assert_start_raises_init_error(0, ['-zapwallettxes=1', '-wallet=w1', '-wallet=w2'], "Error: -zapwallettxes is only allowed with a single wallet file")
-        self.assert_start_raises_init_error(0, ['-zapwallettxes=2', '-wallet=w1', '-wallet=w2'], "Error: -zapwallettxes is only allowed with a single wallet file")
-
-        self.log.info("Do not allow -salvagewallet with multiwallet")
-        self.assert_start_raises_init_error(0, ['-salvagewallet', '-wallet=w1', '-wallet=w2'], "Error: -salvagewallet is only allowed with a single wallet file")
-        self.assert_start_raises_init_error(0, ['-salvagewallet=1', '-wallet=w1', '-wallet=w2'], "Error: -salvagewallet is only allowed with a single wallet file")
-
-        self.log.info("Do not allow -upgradewallet with multiwallet")
-        self.assert_start_raises_init_error(0, ['-upgradewallet', '-wallet=w1', '-wallet=w2'], "Error: -upgradewallet is only allowed with a single wallet file")
-        self.assert_start_raises_init_error(0, ['-upgradewallet=1', '-wallet=w1', '-wallet=w2'], "Error: -upgradewallet is only allowed with a single wallet file")
 
         # if wallets/ doesn't exist, datadir should be the default wallet dir
         wallet_dir2 = data_dir('walletdir')

@@ -24,8 +24,8 @@ from .util import (
     check_json_precision,
     connect_nodes_bi,
     disconnect_nodes,
-    get_datadir_path,
     initialize_datadir,
+    log_filename,
     p2p_port,
     set_node_times,
     sync_blocks,
@@ -41,10 +41,14 @@ TEST_EXIT_PASSED = 0
 TEST_EXIT_FAILED = 1
 TEST_EXIT_SKIPPED = 77
 
-class BitcoinTestFramework():
-    """Base class for a bitcoin test script.
+TEST_BIT_PREMINE = 301
+TEST_BPQ_PREMINE = 100
+TEST_PREMINE = TEST_BIT_PREMINE + TEST_BPQ_PREMINE
 
-    Individual bitcoin test scripts should subclass this class and override the set_test_params() and run_test() methods.
+class BitcoinTestFramework():
+    """Base class for a bpq test script.
+
+    Individual bpq test scripts should subclass this class and override the set_test_params() and run_test() methods.
 
     Individual tests can also override the following methods to customize the test setup:
 
@@ -72,11 +76,11 @@ class BitcoinTestFramework():
 
         parser = optparse.OptionParser(usage="%prog [options]")
         parser.add_option("--nocleanup", dest="nocleanup", default=False, action="store_true",
-                          help="Leave bitcoinds and test.* datadir on exit or error")
+                          help="Leave bpqds and test.* datadir on exit or error")
         parser.add_option("--noshutdown", dest="noshutdown", default=False, action="store_true",
-                          help="Don't stop bitcoinds after the test execution")
+                          help="Don't stop bpqds after the test execution")
         parser.add_option("--srcdir", dest="srcdir", default=os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/../../../src"),
-                          help="Source directory containing bitcoind/bitcoin-cli (default: %default)")
+                          help="Source directory containing bpqd/bpq-cli (default: %default)")
         parser.add_option("--cachedir", dest="cachedir", default=os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/../../cache"),
                           help="Directory for caching pregenerated datadirs")
         parser.add_option("--tmpdir", dest="tmpdir", help="Root directory for datadirs")
@@ -93,7 +97,7 @@ class BitcoinTestFramework():
         parser.add_option("--pdbonfailure", dest="pdbonfailure", default=False, action="store_true",
                           help="Attach a python debugger if test fails")
         parser.add_option("--usecli", dest="usecli", default=False, action="store_true",
-                          help="use bitcoin-cli instead of RPC for all commands")
+                          help="use bpq-cli instead of RPC for all commands")
         self.add_options(parser)
         (self.options, self.args) = parser.parse_args()
 
@@ -145,9 +149,7 @@ class BitcoinTestFramework():
             if self.nodes:
                 self.stop_nodes()
         else:
-            for node in self.nodes:
-                node.cleanup_on_exit = False
-            self.log.info("Note: bitcoinds were not stopped and may still be running")
+            self.log.info("Note: bpqds were not stopped and may still be running")
 
         if not self.options.nocleanup and not self.options.noshutdown and success != TestStatus.FAILED:
             self.log.info("Cleaning up")
@@ -223,7 +225,7 @@ class BitcoinTestFramework():
             self.nodes.append(TestNode(i, self.options.tmpdir, extra_args[i], rpchost, timewait=timewait, binary=binary[i], stderr=None, mocktime=self.mocktime, coverage_dir=self.options.coveragedir, use_cli=self.options.usecli))
 
     def start_node(self, i, *args, **kwargs):
-        """Start a bitcoind"""
+        """Start a bpqd"""
 
         node = self.nodes[i]
 
@@ -234,7 +236,7 @@ class BitcoinTestFramework():
             coverage.write_all_rpc_commands(self.options.coveragedir, node.rpc)
 
     def start_nodes(self, extra_args=None, *args, **kwargs):
-        """Start multiple bitcoinds"""
+        """Start multiple bpqds"""
 
         if extra_args is None:
             extra_args = [None] * self.num_nodes
@@ -254,12 +256,12 @@ class BitcoinTestFramework():
                 coverage.write_all_rpc_commands(self.options.coveragedir, node.rpc)
 
     def stop_node(self, i):
-        """Stop a bitcoind test node"""
+        """Stop a bpqd test node"""
         self.nodes[i].stop_node()
         self.nodes[i].wait_until_stopped()
 
     def stop_nodes(self):
-        """Stop multiple bitcoind test nodes"""
+        """Stop multiple bpqd test nodes"""
         for node in self.nodes:
             # Issue RPC to stop nodes
             node.stop_node()
@@ -279,7 +281,7 @@ class BitcoinTestFramework():
                 self.start_node(i, extra_args, stderr=log_stderr, *args, **kwargs)
                 self.stop_node(i)
             except Exception as e:
-                assert 'bitcoind exited' in str(e)  # node must have shutdown
+                assert 'bpqd exited' in str(e)  # node must have shutdown
                 self.nodes[i].running = False
                 self.nodes[i].process = None
                 if expected_msg is not None:
@@ -289,9 +291,9 @@ class BitcoinTestFramework():
                         raise AssertionError("Expected error \"" + expected_msg + "\" not found in:\n" + stderr)
             else:
                 if expected_msg is None:
-                    assert_msg = "bitcoind should have exited with an error"
+                    assert_msg = "bpqd should have exited with an error"
                 else:
-                    assert_msg = "bitcoind should have exited with expected error " + expected_msg
+                    assert_msg = "bpqd should have exited with expected error " + expected_msg
                 raise AssertionError(assert_msg)
 
     def wait_for_node_exit(self, i, timeout):
@@ -349,7 +351,7 @@ class BitcoinTestFramework():
         # User can provide log level as a number or string (eg DEBUG). loglevel was caught as a string, so try to convert it to an int
         ll = int(self.options.loglevel) if self.options.loglevel.isdigit() else self.options.loglevel.upper()
         ch.setLevel(ll)
-        # Format logs the same as bitcoind's debug.log with microprecision (so log files can be concatenated and sorted)
+        # Format logs the same as bpqd's debug.log with microprecision (so log files can be concatenated and sorted)
         formatter = logging.Formatter(fmt='%(asctime)s.%(msecs)03d000 %(name)s (%(levelname)s): %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         formatter.converter = time.gmtime
         fh.setFormatter(formatter)
@@ -359,13 +361,35 @@ class BitcoinTestFramework():
         self.log.addHandler(ch)
 
         if self.options.trace_rpc:
-            rpc_logger = logging.getLogger("BitcoinRPC")
+            rpc_logger = logging.getLogger("BPQRPC")
             rpc_logger.setLevel(logging.DEBUG)
             rpc_handler = logging.StreamHandler(sys.stdout)
             rpc_handler.setLevel(logging.DEBUG)
             rpc_logger.addHandler(rpc_handler)
 
-    def _initialize_chain(self):
+    def _initialize_premine(self, block_time):
+
+        # BPQ:
+        # Create 110 bitcoin blocks & 20 premine blocks
+
+        # 110 bitcoin blocks
+        bit_basecoin_address = "mkkbuYajsaMq7QZksFmUwFc3uy6ZHLsZYU"
+        for j in range(TEST_BIT_PREMINE):
+            set_node_times(self.nodes, block_time)
+            self.nodes[0].generatetoaddress(1, bit_basecoin_address)
+            block_time += 10 * 60
+        # Must sync before next peer starts generating blocks
+
+        # 20 premine
+        for j in range(TEST_BIT_PREMINE):
+            set_node_times(self.nodes, block_time)
+            self.nodes[0].generate(1)
+            block_time += 10 * 60
+        # Must sync before next peer starts generating blocks
+
+        return block_time
+
+    def _initialize_chain(self, block_count = 200):
         """Initialize a pre-mined blockchain for use by the test.
 
         Create a cache of a 200-block-long chain (with wallet) for MAX_NODES
@@ -374,7 +398,7 @@ class BitcoinTestFramework():
         assert self.num_nodes <= MAX_NODES
         create_cache = False
         for i in range(MAX_NODES):
-            if not os.path.isdir(get_datadir_path(self.options.cachedir, i)):
+            if not os.path.isdir(os.path.join(self.options.cachedir, 'node' + str(i))):
                 create_cache = True
                 break
 
@@ -383,13 +407,13 @@ class BitcoinTestFramework():
 
             # find and delete old cache directories if any exist
             for i in range(MAX_NODES):
-                if os.path.isdir(get_datadir_path(self.options.cachedir, i)):
-                    shutil.rmtree(get_datadir_path(self.options.cachedir, i))
+                if os.path.isdir(os.path.join(self.options.cachedir, "node" + str(i))):
+                    shutil.rmtree(os.path.join(self.options.cachedir, "node" + str(i)))
 
-            # Create cache directories, run bitcoinds:
+            # Create cache directories, run bpqds:
             for i in range(MAX_NODES):
                 datadir = initialize_datadir(self.options.cachedir, i)
-                args = [os.getenv("BITCOIND", "bitcoind"), "-server", "-keypool=1", "-datadir=" + datadir, "-discover=0"]
+                args = [os.getenv("BPQD", "bpqd"), "-server", "-keypool=1", "-datadir=" + datadir, "-discover=0"]
                 if i > 0:
                     args.append("-connect=127.0.0.1:" + str(p2p_port(0)))
                 self.nodes.append(TestNode(i, self.options.cachedir, extra_args=[], rpchost=None, timewait=None, binary=None, stderr=None, mocktime=self.mocktime, coverage_dir=None))
@@ -408,34 +432,48 @@ class BitcoinTestFramework():
             # blocks are created with timestamps 10 minutes apart
             # starting from 2010 minutes in the past
             self.enable_mocktime()
-            block_time = self.mocktime - (201 * 10 * 60)
-            for i in range(2):
-                for peer in range(4):
-                    for j in range(25):
-                        set_node_times(self.nodes, block_time)
-                        self.nodes[peer].generate(1)
-                        block_time += 10 * 60
+            block_time = self.mocktime - ((block_count + 1) * 10 * 60)
+
+            # generate 200 blocks
+            if block_count >= 200:
+                for i in range(2):
+                    for peer in range(4):
+                        for j in range(25):
+                            set_node_times(self.nodes, block_time)
+                            self.nodes[peer].generate(1)
+                            block_time += 10 * 60
+                        # Must sync before next peer starts generating blocks
+                        sync_blocks(self.nodes)
+
+            # generate additional blocks
+            if block_count > 200:
+                prev_peer = -1
+                for i in range(block_count-200):
+                    peer  = (i // 16) % 4
+                    set_node_times(self.nodes, block_time)
+                    self.nodes[peer].generate(1)
+                    block_time += 10 * 60
+
                     # Must sync before next peer starts generating blocks
-                    sync_blocks(self.nodes)
+                    if peer != prev_peer:
+                        sync_blocks(self.nodes)
+                    prev_peer = peer
 
             # Shut them down, and clean up cache directories:
             self.stop_nodes()
             self.nodes = []
             self.disable_mocktime()
-
-            def cache_path(n, *paths):
-                return os.path.join(get_datadir_path(self.options.cachedir, n), "regtest", *paths)
-
             for i in range(MAX_NODES):
-                for entry in os.listdir(cache_path(i)):
-                    if entry not in ['wallets', 'chainstate', 'blocks']:
-                        os.remove(cache_path(i, entry))
+                os.remove(log_filename(self.options.cachedir, i, "debug.log"))
+                os.remove(log_filename(self.options.cachedir, i, "wallets/db.log"))
+                os.remove(log_filename(self.options.cachedir, i, "peers.dat"))
+                os.remove(log_filename(self.options.cachedir, i, "fee_estimates.dat"))
 
         for i in range(self.num_nodes):
-            from_dir = get_datadir_path(self.options.cachedir, i)
-            to_dir = get_datadir_path(self.options.tmpdir, i)
+            from_dir = os.path.join(self.options.cachedir, "node" + str(i))
+            to_dir = os.path.join(self.options.tmpdir, "node" + str(i))
             shutil.copytree(from_dir, to_dir)
-            initialize_datadir(self.options.tmpdir, i)  # Overwrite port/rpcport in bitcoin.conf
+            initialize_datadir(self.options.tmpdir, i)  # Overwrite port/rpcport in bpq.conf
 
     def _initialize_chain_clean(self):
         """Initialize empty blockchain for use by the test.
@@ -445,10 +483,32 @@ class BitcoinTestFramework():
         for i in range(self.num_nodes):
             initialize_datadir(self.options.tmpdir, i)
 
+    def generate_premine(self, block_time = 0):
+
+        # BPQ:
+        # Create 110 bitcoin blocks & 20 premine blocks
+
+        self.log.info("Generate 110 bitcoin blocks...")
+
+        # 110 bitcoin blocks
+        bit_basecoin_address = "mkkbuYajsaMq7QZksFmUwFc3uy6ZHLsZYU"
+        self.nodes[0].generatetoaddress(TEST_BIT_PREMINE, bit_basecoin_address)
+        block_time += TEST_BIT_PREMINE * 10 * 60
+
+        self.log.info("Generate 20 BPQ Premine blocks...")
+
+        # 20 premine
+        self.nodes[0].generate(TEST_BPQ_PREMINE)
+        block_time += TEST_BPQ_PREMINE * 10 * 60
+
+        self.log.info("130 blocks are generated")
+
+        return block_time
+
 class ComparisonTestFramework(BitcoinTestFramework):
     """Test framework for doing p2p comparison testing
 
-    Sets up some bitcoind binaries:
+    Sets up some bpqd binaries:
     - 1 binary: test binary
     - 2 binaries: 1 test binary, 1 ref binary
     - n>2 binaries: 1 test binary, n-1 ref binaries"""
@@ -459,11 +519,11 @@ class ComparisonTestFramework(BitcoinTestFramework):
 
     def add_options(self, parser):
         parser.add_option("--testbinary", dest="testbinary",
-                          default=os.getenv("BITCOIND", "bitcoind"),
-                          help="bitcoind binary to test")
+                          default=os.getenv("BPQD", "bpqd"),
+                          help="bpqd binary to test")
         parser.add_option("--refbinary", dest="refbinary",
-                          default=os.getenv("BITCOIND", "bitcoind"),
-                          help="bitcoind binary to use for reference nodes (if any)")
+                          default=os.getenv("BPQD", "bpqd"),
+                          help="bpqd binary to use for reference nodes (if any)")
 
     def setup_network(self):
         extra_args = [['-whitelist=127.0.0.1']] * self.num_nodes

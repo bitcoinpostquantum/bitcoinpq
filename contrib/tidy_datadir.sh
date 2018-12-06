@@ -7,7 +7,7 @@ if [ -d "$1" ]; then
   cd "$1" || exit 1
 else
   echo "Usage: $0 <datadir>" >&2
-  echo "Removes obsolete Bitcoin database files" >&2
+  echo "Removes obsolete BPQ database files" >&2
   exit 1
 fi
 
@@ -19,7 +19,7 @@ if [ -f wallet.dat -a -f peers.dat -a -f chainstate/CURRENT -a -f blocks/index/C
 
 case $LEVEL in
   0)
-    echo "Error: no Bitcoin datadir detected."
+    echo "Error: no BPQ datadir detected."
     exit 1
     ;;
   1)

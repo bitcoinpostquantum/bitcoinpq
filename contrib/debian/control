@@ -30,7 +30,7 @@ Homepage: https://bitcoincore.org/
 Vcs-Git: git://github.com/bitcoin/bitcoin.git
 Vcs-Browser: https://github.com/bitcoin/bitcoin
 
-Package: bitcoind
+Package: bpqd
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: peer-to-peer network based digital currency - daemon
@@ -40,10 +40,10 @@ Description: peer-to-peer network based digital currency - daemon
  transact directly with each other, with the help of a P2P network to
  check for double-spending.
  .
- This package provides the daemon, bitcoind, and the CLI tool
- bitcoin-cli to interact with the daemon.
+ This package provides the daemon, bpqd, and the CLI tool
+ bpq-cli to interact with the daemon.
 
-Package: bitcoin-qt
+Package: bpq-qt
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: peer-to-peer network based digital currency - Qt GUI

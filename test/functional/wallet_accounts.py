@@ -57,6 +57,9 @@ class WalletAccountsTest(BitcoinTestFramework):
             minconf=1,
         )
         tx_details = node.gettransaction(txid)
+
+        self.log.info("tx_details: %s", tx_details)
+
         fee = -tx_details['details'][0]['fee']
         # there should be 1 address group, with the previously
         # unlinked addresses now linked (they both have 0 balance)

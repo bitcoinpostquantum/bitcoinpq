@@ -26,7 +26,7 @@ public:
     int64_t EndTime(const Consensus::Params& params) const override { return TestTime(20000); }
     int Period(const Consensus::Params& params) const override { return 1000; }
     int Threshold(const Consensus::Params& params) const override { return 900; }
-    bool Condition(const CBlockIndex* pindex, const Consensus::Params& params) const override { return (pindex->nVersion & 0x100); }
+    bool Condition(const CBlockIndex* pindex, const Consensus::Params& params) const override { return (pindex->nMinorVersion & 0x100); }
 
     ThresholdState GetStateFor(const CBlockIndex* pindexPrev) const { return AbstractThresholdConditionChecker::GetStateFor(pindexPrev, paramsDummy, cache); }
     int GetStateSinceHeightFor(const CBlockIndex* pindexPrev) const { return AbstractThresholdConditionChecker::GetStateSinceHeightFor(pindexPrev, paramsDummy, cache); }
@@ -80,7 +80,7 @@ public:
             pindex->nHeight = vpblock.size();
             pindex->pprev = vpblock.size() > 0 ? vpblock.back() : nullptr;
             pindex->nTime = nTime;
-            pindex->nVersion = nVersion;
+            pindex->nMinorVersion = nVersion;
             pindex->BuildSkip();
             vpblock.push_back(pindex);
         }

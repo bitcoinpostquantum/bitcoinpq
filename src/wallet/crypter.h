@@ -1,4 +1,5 @@
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -65,7 +66,7 @@ public:
     }
 };
 
-typedef std::vector<unsigned char, secure_allocator<unsigned char> > CKeyingMaterial;
+typedef bpqcrypto::secure_vector<uint8_t> CKeyingMaterial;
 
 namespace wallet_crypto
 {
@@ -77,8 +78,8 @@ class CCrypter
 {
 friend class wallet_crypto::TestCrypter; // for test access to chKey/chIV
 private:
-    std::vector<unsigned char, secure_allocator<unsigned char>> vchKey;
-    std::vector<unsigned char, secure_allocator<unsigned char>> vchIV;
+    bpqcrypto::secure_vector<uint8_t> vchKey;
+    bpqcrypto::secure_vector<uint8_t> vchIV;
     bool fKeySet;
 
     int BytesToKeySHA512AES(const std::vector<unsigned char>& chSalt, const SecureString& strKeyData, int count, unsigned char *key,unsigned char *iv) const;

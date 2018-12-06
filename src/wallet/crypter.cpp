@@ -1,4 +1,5 @@
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -26,7 +27,7 @@ int CCrypter::BytesToKeySHA512AES(const std::vector<unsigned char>& chSalt, cons
     unsigned char buf[CSHA512::OUTPUT_SIZE];
     CSHA512 di;
 
-    di.Write((const unsigned char*)strKeyData.c_str(), strKeyData.size());
+    di.Write((const unsigned char*)strKeyData.c_str(), (const size_t)strKeyData.size());
     di.Write(chSalt.data(), chSalt.size());
     di.Finalize(buf);
 
@@ -130,15 +131,30 @@ static bool DecryptSecret(const CKeyingMaterial& vMasterKey, const std::vector<u
 
 static bool DecryptKey(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCryptedSecret, const CPubKey& vchPubKey, CKey& key)
 {
-    CKeyingMaterial vchSecret;
-    if(!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
+	CKeyingMaterial vchSecret;
+	if(!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
         return false;
 
-    if (vchSecret.size() != 32)
-        return false;
+	if (vchPubKey.IsXMSS())
+	{
+        if (vchSecret.size() == 0)
+            return false;
 
-    key.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
-    return key.VerifyPubKey(vchPubKey);
+        key.Set(vchSecret.data(), vchSecret.data() + vchSecret.size());
+		return key.VerifyPubKey(vchPubKey);
+        
+		//throw std::logic_error("HD for XMSS not implemented");
+		//key.Set(vchSecret.data(), vchSecret.size());
+		//return key.VerifyPubKey(vchPubKey);
+	}
+	else
+	{
+        if (vchSecret.size() != 32)
+            return false;
+
+        key.SetLegacy(vchSecret.data(), vchSecret.data() + vchSecret.size(), vchPubKey.IsCompressed());
+		return key.VerifyPubKey(vchPubKey);
+	}
 }
 
 bool CCryptoKeyStore::SetCrypted()
@@ -270,6 +286,7 @@ bool CCryptoKeyStore::GetKey(const CKeyID &address, CKey& keyOut) const
     {
         const CPubKey &vchPubKey = (*mi).second.first;
         const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
+		keyOut.AssignKeyStore(const_cast<CCryptoKeyStore*>(this));
         return DecryptKey(vMasterKey, vchCryptedSecret, vchPubKey, keyOut);
     }
     return false;

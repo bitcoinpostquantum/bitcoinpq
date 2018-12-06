@@ -1,4 +1,5 @@
 // Copyright (c) 2013-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -89,10 +90,17 @@ TestVector test3 =
 
 void RunTest(const TestVector &test) {
     std::vector<unsigned char> seed = ParseHex(test.strHexMaster);
+	
+	BOOST_TEST_MESSAGE( "======= RunTest =========" );
+
     CExtKey key;
+	BOOST_CHECK(!key.key.IsXMSS());
+	
     CExtPubKey pubkey;
     key.SetMaster(seed.data(), seed.size());
     pubkey = key.Neuter();
+	BOOST_CHECK(!pubkey.pubkey.IsXMSS());
+
     for (const TestDerivation &derive : test.vDerive) {
         unsigned char data[74];
         key.Encode(data);
@@ -100,6 +108,7 @@ void RunTest(const TestVector &test) {
 
         // Test private key
         CBitcoinExtKey b58key; b58key.SetKey(key);
+		BOOST_CHECK(!key.key.IsXMSS());
         BOOST_CHECK(b58key.ToString() == derive.prv);
 
         CBitcoinExtKey b58keyDecodeCheck(derive.prv);
@@ -109,8 +118,19 @@ void RunTest(const TestVector &test) {
         // Test public key
         CBitcoinExtPubKey b58pubkey; b58pubkey.SetKey(pubkey);
         BOOST_CHECK(b58pubkey.ToString() == derive.pub);
+		
+		BOOST_TEST_MESSAGE("b58pubkey: " + b58pubkey.ToString());
+		
+        CExtPubKey pubkey2 = b58pubkey.GetKey();
+		BOOST_TEST_MESSAGE("pubkey1: " + HexStr(pubkey.pubkey));
+		BOOST_TEST_MESSAGE("pubkey2: " + HexStr(pubkey2.pubkey));
+        BOOST_CHECK(pubkey2.pubkey == pubkey.pubkey);
+        BOOST_CHECK(pubkey2 == pubkey);
+		
 
         CBitcoinExtPubKey b58PubkeyDecodeCheck(derive.pub);
+		BOOST_TEST_MESSAGE("b58PubkeyDecodeCheck: " + b58PubkeyDecodeCheck.ToString());
+		
         CExtPubKey checkPubKey = b58PubkeyDecodeCheck.GetKey();
         assert(checkPubKey == pubkey); //ensure a base58 decoded pubkey also matches
 
@@ -141,6 +161,9 @@ void RunTest(const TestVector &test) {
         ssPriv >> privCheck;
 
         BOOST_CHECK(pubCheck == pubkeyNew);
+
+		BOOST_TEST_MESSAGE("privCheck: " + HexStr(privCheck.key));
+		BOOST_TEST_MESSAGE("keyNew:    " + HexStr(keyNew.key));
         BOOST_CHECK(privCheck == keyNew);
     }
 }

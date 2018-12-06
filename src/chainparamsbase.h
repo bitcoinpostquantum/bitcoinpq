@@ -10,8 +10,8 @@
 #include <vector>
 
 /**
- * CBaseChainParams defines the base parameters (shared between bitcoin-cli and bitcoind)
- * of a given instance of the Bitcoin system.
+ * CBaseChainParams defines the base parameters (shared between bpq-cli and bpqd)
+ * of a given instance of the BPQ system.
  */
 class CBaseChainParams
 {

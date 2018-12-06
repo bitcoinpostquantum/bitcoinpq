@@ -1,0 +1,52 @@
+LIBBPQ_BPQCRYPTO=bpqcrypto/libbpqcrypto.a
+LIBBPQ_BPQCRYPTOL=bpqcrypto/libbpqcrypto.la
+
+EXTRA_LIBRARIES += $(LIBBPQ_BPQCRYPTO)
+lib_LTLIBRARIES += $(LIBBPQ_BPQCRYPTOL)
+
+BPQCRYPTO_FILES = \
+    bpqcrypto/src/bpqcrypto.cpp \
+    bpqcrypto/src/bpqhash.cpp \
+    bpqcrypto/include/bpqcrypto.hpp \
+    bpqcrypto/src/xmss_address.h \
+    bpqcrypto/src/xmss_common_ops.cpp \
+    bpqcrypto/src/xmss_common_ops.h \
+    bpqcrypto/src/xmss_hash.cpp \
+    bpqcrypto/src/xmss_hash.h \
+    bpqcrypto/src/xmss_hashtree.h \
+    bpqcrypto/src/xmss_index_registry.cpp \
+    bpqcrypto/src/xmss_index_registry.h \
+    bpqcrypto/src/xmss_key_pair.h \
+    bpqcrypto/src/xmss_parameters.cpp \
+    bpqcrypto/src/xmss_parameters.h \
+    bpqcrypto/src/xmss_privatekey.cpp \
+    bpqcrypto/src/xmss_privatekey.h \
+    bpqcrypto/src/xmss_publickey.cpp \
+    bpqcrypto/src/xmss_publickey.h \
+    bpqcrypto/src/xmss_signature.cpp \
+    bpqcrypto/src/xmss_signature.h \
+    bpqcrypto/src/xmss_signature_operation.cpp \
+    bpqcrypto/src/xmss_signature_operation.h \
+    bpqcrypto/src/xmss_tools.cpp \
+    bpqcrypto/src/xmss_tools.h \
+    bpqcrypto/src/xmss_verification_operation.cpp \
+    bpqcrypto/src/xmss_verification_operation.h \
+    bpqcrypto/src/xmss_wots_addressed_privatekey.h \
+    bpqcrypto/src/xmss_wots_addressed_publickey.h \
+    bpqcrypto/src/xmss_wots_parameters.cpp \
+    bpqcrypto/src/xmss_wots_parameters.h \
+    bpqcrypto/src/xmss_wots_privatekey.cpp \
+    bpqcrypto/src/xmss_wots_privatekey.h \
+    bpqcrypto/src/xmss_wots_publickey.cpp \
+    bpqcrypto/src/xmss_wots_publickey.h
+
+bpqcrypto_libbpqcrypto_a_SOURCES = $(BPQCRYPTO_FILES)
+bpqcrypto_libbpqcrypto_a_CPPFLAGS = $(AM_CPPFLAGS) $(BOTAN_CFLAGS)
+bpqcrypto_libbpqcrypto_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS) 
+
+bpqcrypto_libbpqcrypto_la_SOURCES = $(BPQCRYPTO_FILES)
+bpqcrypto_libbpqcrypto_la_CPPFLAGS = $(AM_CPPFLAGS) $(BOTAN_CFLAGS)
+bpqcrypto_libbpqcrypto_la_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS) 
+
+#bpqcrypto_libbpqcrypto_a_LIBADD = $(BOTAN_LIBS) 
+#bpqcrypto_libbpqcrypto_a_LDFLAGS = $(AM_LDFLAGS) -no-undefined $(RELDFLAGS)

@@ -71,6 +71,7 @@ class ImportMultiTest (BitcoinTestFramework):
         result = self.nodes[1].importmulti([{
             "scriptPubKey": address['scriptPubKey'],
             "timestamp": "now",
+            "version": 0,
             "internal": True
         }])
         assert_equal(result[0]['success'], True)
@@ -267,6 +268,7 @@ class ImportMultiTest (BitcoinTestFramework):
                 "address": multi_sig_script['address']
             },
             "timestamp": "now",
+            "version": 0,
             "redeemscript": multi_sig_script['redeemScript']
         }])
         assert_equal(result[0]['success'], True)
@@ -417,6 +419,7 @@ class ImportMultiTest (BitcoinTestFramework):
                 "address": watchonly_address,
             },
             "timestamp": "now",
+            "version": 0,
         }])
         assert_equal(result[0]['success'], True)
         address_assert = self.nodes[1].validateaddress(watchonly_address)

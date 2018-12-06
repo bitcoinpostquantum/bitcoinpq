@@ -106,7 +106,7 @@ class InvalidBlockRequestTest(ComparisonTestFramework):
         block2_dup.hashMerkleRoot = block2_dup.calc_merkle_root()
         block2_dup.rehash()
         block2_dup.solve()
-        yield TestInstance([[block2_dup, RejectResult(16, b'bad-txns-inputs-duplicate')], [block2_orig, True]])
+        yield TestInstance([[block2_dup, RejectResult(16, b'bad-txns-inputs-duplicate')], [block2_orig, True]])        
         height += 1
 
         '''

@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -79,7 +80,7 @@ namespace // Anon namespace
 //
 static QString ipcServerName()
 {
-    QString name("BitcoinQt");
+    QString name("BPQQt");
 
     // Append a simple hash of the datadir
     // Note that GetDataDir(true) returns a different path
@@ -448,7 +449,7 @@ void PaymentServer::handleURIOrFile(const QString& s)
             }
             else
                 Q_EMIT message(tr("URI handling"),
-                    tr("URI cannot be parsed! This can be caused by an invalid Bitcoin address or malformed URI parameters."),
+                    tr("URI cannot be parsed! This can be caused by an invalid BPQ address or malformed URI parameters."),
                     CClientUIInterface::ICON_WARNING);
 
             return;
@@ -569,7 +570,7 @@ bool PaymentServer::processPaymentRequest(const PaymentRequestPlus& request, Sen
             return false;
         }
 
-        // Bitcoin amounts are stored as (optional) uint64 in the protobuf messages (see paymentrequest.proto),
+        // BPQ amounts are stored as (optional) uint64 in the protobuf messages (see paymentrequest.proto),
         // but CAmount is defined as int64_t. Because of that we need to verify that amounts are in a valid range
         // and no overflow has happened.
         if (!verifyAmount(sendingTo.second)) {
@@ -638,7 +639,7 @@ void PaymentServer::fetchPaymentACK(CWallet* wallet, const SendCoinsRecipient& r
     QString account = tr("Refund from %1").arg(recipient.authenticatedMerchant);
     std::string strAccount = account.toStdString();
     CPubKey newKey;
-    if (wallet->GetKeyFromPool(newKey)) {
+    if (wallet->GetNewKey(newKey, KeyTypeFromOutputType(g_address_type))) {
         // BIP70 requests encode the scriptPubKey directly, so we are not restricted to address
         // types supported by the receiver. As a result, we choose the address format we also
         // use for change. Despite an actual payment and not change, this is a close match:

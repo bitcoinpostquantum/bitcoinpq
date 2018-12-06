@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -107,7 +108,7 @@ static void push_lock(void* c, const CLockLocation& locklocation)
 
     g_lockstack.push_back(std::make_pair(c, locklocation));
 
-    for (const std::pair<void*, CLockLocation>& i : g_lockstack) {
+    for (const std::pair<void*, CLockLocation> & i : g_lockstack) {
         if (i.first == c)
             break;
 
@@ -141,14 +142,14 @@ void LeaveCritical()
 std::string LocksHeld()
 {
     std::string result;
-    for (const std::pair<void*, CLockLocation>& i : g_lockstack)
+    for (const std::pair<void*, CLockLocation> & i : g_lockstack)
         result += i.second.ToString() + std::string("\n");
     return result;
 }
 
 void AssertLockHeldInternal(const char* pszName, const char* pszFile, int nLine, void* cs)
 {
-    for (const std::pair<void*, CLockLocation>& i : g_lockstack)
+    for (const std::pair<void*, CLockLocation> & i : g_lockstack)
         if (i.first == cs)
             return;
     fprintf(stderr, "Assertion failed: lock %s not held in %s:%i; locks held:\n%s", pszName, pszFile, nLine, LocksHeld().c_str());

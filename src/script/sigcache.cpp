@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -80,13 +81,26 @@ void InitSignatureCache()
             (nElems*sizeof(uint256)) >>20, (nMaxCacheSize*2)>>20, nElems);
 }
 
-bool CachingTransactionSignatureChecker::VerifySignature(const std::vector<unsigned char>& vchSig, const CPubKey& pubkey, const uint256& sighash) const
+bool CachingTransactionSignatureChecker::VerifySignature(const std::vector<unsigned char>& vchSig, const CPubKey& pubkey, CDataStream const & msg) const
+{
+    uint256 entry;
+    signatureCache.ComputeEntry(entry, Hash(msg.begin(), msg.end()), vchSig, pubkey);
+    if (signatureCache.Get(entry, !store))
+        return true;
+    if (!TransactionSignatureChecker::VerifySignature(vchSig, pubkey, msg))
+        return false;
+    if (store)
+        signatureCache.Set(entry);
+    return true;
+}
+
+bool CachingTransactionSignatureChecker::VerifySignatureHash(const std::vector<unsigned char>& vchSig, const CPubKey& pubkey, const uint256& sighash) const
 {
     uint256 entry;
     signatureCache.ComputeEntry(entry, sighash, vchSig, pubkey);
     if (signatureCache.Get(entry, !store))
         return true;
-    if (!TransactionSignatureChecker::VerifySignature(vchSig, pubkey, sighash))
+    if (!TransactionSignatureChecker::VerifySignatureHash(vchSig, pubkey, sighash))
         return false;
     if (store)
         signatureCache.Set(entry);

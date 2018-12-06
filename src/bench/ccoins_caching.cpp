@@ -1,4 +1,5 @@
 // Copyright (c) 2016-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -25,7 +26,7 @@ SetupDummyInputs(CBasicKeyStore& keystoreRet, CCoinsViewCache& coinsRet)
     // Add some keys to the keystore:
     CKey key[4];
     for (int i = 0; i < 4; i++) {
-        key[i].MakeNewKey(i % 2);
+        key[i].MakeNewKey(i % 2 ? CKeyType::ECDSA_COMPRESSED : CKeyType::ECDSA_UNCOMPRESSED);
         keystoreRet.AddKey(key[i]);
     }
 

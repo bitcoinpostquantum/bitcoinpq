@@ -82,12 +82,34 @@ class ListTransactionsTest(BitcoinTestFramework):
                            {"txid":txid, "account" : "toself"} )
 
         pubkey = self.nodes[1].validateaddress(self.nodes[1].getnewaddress())['pubkey']
+
+        self.log.info("pubkey: %s", pubkey)
+
         multisig = self.nodes[1].createmultisig(1, [pubkey])
-        self.nodes[0].importaddress(multisig["redeemScript"], "watchonly", False, True)
+
+        self.log.info("multisig: %s", multisig)
+
+        impaddr = self.nodes[0].importaddress(multisig["redeemScript"], "watchonly", False, True)
+
+        self.log.info("getaddressesbyaccount: %s", self.nodes[0].getaddressesbyaccount("watchonly"))
+
         txid = self.nodes[1].sendtoaddress(multisig["address"], 0.1)
+
+        self.log.info("txid: %s", txid)
+        self.log.info("1: tx: %s", self.nodes[1].gettransaction(txid))
+
         self.nodes[1].generate(1)
         self.sync_all()
+
+        self.log.info("0: tx: %s", self.nodes[0].gettransaction(txid))
+
+        self.log.info("list wo false: %s", self.nodes[0].listtransactions("watchonly", 100, 0, False))
+
         assert(len(self.nodes[0].listtransactions("watchonly", 100, 0, False)) == 0)
+
+        self.log.info("list wo true: %s", self.nodes[0].listtransactions("watchonly", 100, 0, True))
+
+
         assert_array_result(self.nodes[0].listtransactions("watchonly", 100, 0, True),
                            {"category":"receive","amount":Decimal("0.1")},
                            {"txid":txid, "account" : "watchonly"} )

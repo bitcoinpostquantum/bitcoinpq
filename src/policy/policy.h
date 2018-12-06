@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2018 The Bitcoin Post-Quantum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,14 +17,19 @@
 class CCoinsViewCache;
 class CTxOut;
 
+/** Default for -blockmaxsize, which controls the maximum size of block the mining code will create **/
+//static const unsigned int DEFAULT_BLOCK_MAX_SIZE = 750000;
+static const unsigned int DEFAULT_BLOCK_MAX_SIZE = 32000000; // BPQ
 /** Default for -blockmaxweight, which controls the range of block weights the mining code will create **/
-static const unsigned int DEFAULT_BLOCK_MAX_WEIGHT = MAX_BLOCK_WEIGHT - 4000;
+//static const unsigned int DEFAULT_BLOCK_MAX_WEIGHT = 3000000;
+static const unsigned int DEFAULT_BLOCK_MAX_WEIGHT = 32000000; // BPQ
+/** Default for -blockmaxweight, which controls the range of block weights the mining code will create **/
+//static const unsigned int DEFAULT_BLOCK_MAX_WEIGHT = MAX_BLOCK_WEIGHT - 4000;
 /** Default for -blockmintxfee, which sets the minimum feerate for a transaction in blocks created by mining code **/
 static const unsigned int DEFAULT_BLOCK_MIN_TX_FEE = 1000;
 /** The maximum weight for transactions we're willing to relay/mine */
-static const unsigned int MAX_STANDARD_TX_WEIGHT = 400000;
-/** The minimum non-witness size for transactions we're willing to relay/mine (1 segwit input + 1 P2WPKH output = 82 bytes) */
-static const unsigned int MIN_STANDARD_TX_NONWITNESS_SIZE = 82;
+//static const unsigned int MAX_STANDARD_TX_WEIGHT = 400000;
+static const unsigned int MAX_STANDARD_TX_WEIGHT = 3200000; // BPQ
 /** Maximum number of signature check operations in an IsStandard() P2SH script */
 static const unsigned int MAX_P2SH_SIGOPS = 15;
 /** The maximum number of sigops we're willing to relay/mine in a single tx */
@@ -33,13 +39,16 @@ static const unsigned int DEFAULT_MAX_MEMPOOL_SIZE = 300;
 /** Default for -incrementalrelayfee, which sets the minimum feerate increase for mempool limiting or BIP 125 replacement **/
 static const unsigned int DEFAULT_INCREMENTAL_RELAY_FEE = 1000;
 /** Default for -bytespersigop */
-static const unsigned int DEFAULT_BYTES_PER_SIGOP = 20;
+//static const unsigned int DEFAULT_BYTES_PER_SIGOP = 20;
+static const unsigned int DEFAULT_BYTES_PER_SIGOP = 2;  // BPQ
 /** The maximum number of witness stack items in a standard P2WSH script */
 static const unsigned int MAX_STANDARD_P2WSH_STACK_ITEMS = 100;
 /** The maximum size of each witness stack item in a standard P2WSH script */
-static const unsigned int MAX_STANDARD_P2WSH_STACK_ITEM_SIZE = 80;
+//static const unsigned int MAX_STANDARD_P2WSH_STACK_ITEM_SIZE = 80;
+static const unsigned int MAX_STANDARD_P2WSH_STACK_ITEM_SIZE = 8000;
 /** The maximum size of a standard witnessScript */
-static const unsigned int MAX_STANDARD_P2WSH_SCRIPT_SIZE = 3600;
+//static const unsigned int MAX_STANDARD_P2WSH_SCRIPT_SIZE = 3600;
+static const unsigned int MAX_STANDARD_P2WSH_SCRIPT_SIZE = 7200; // BPQ
 /** Min feerate for defining dust. Historically this has been based on the
  * minRelayTxFee, however changing the dust limit changes which transactions are
  * standard and should be done with care and ideally rarely. It makes sense to
@@ -65,8 +74,7 @@ static constexpr unsigned int STANDARD_SCRIPT_VERIFY_FLAGS = MANDATORY_SCRIPT_VE
                                                              SCRIPT_VERIFY_LOW_S |
                                                              SCRIPT_VERIFY_WITNESS |
                                                              SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM |
-                                                             SCRIPT_VERIFY_WITNESS_PUBKEYTYPE |
-                                                             SCRIPT_VERIFY_CONST_SCRIPTCODE;
+                                                             SCRIPT_VERIFY_WITNESS_PUBKEYTYPE;
 
 /** For convenience, standard but not mandatory verify flags. */
 static constexpr unsigned int STANDARD_NOT_MANDATORY_VERIFY_FLAGS = STANDARD_SCRIPT_VERIFY_FLAGS & ~MANDATORY_SCRIPT_VERIFY_FLAGS;

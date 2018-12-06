@@ -26,12 +26,12 @@ logger = logging.getLogger("TestFramework.utils")
 
 def assert_fee_amount(fee, tx_size, fee_per_kB):
     """Assert the fee was in range"""
-    target_fee = round(tx_size * fee_per_kB / 1000, 8)
+    target_fee = tx_size * fee_per_kB / 1000
     if fee < target_fee:
-        raise AssertionError("Fee of %s BTC too low! (Should be %s BTC)" % (str(fee), str(target_fee)))
+        raise AssertionError("Fee of %s BPQ too low! (Should be %s BPQ)" % (str(fee), str(target_fee)))
     # allow the wallet's estimation to be at most 2 bytes off
     if fee > (tx_size + 2) * fee_per_kB / 1000:
-        raise AssertionError("Fee of %s BTC too high! (Should be %s BTC)" % (str(fee), str(target_fee)))
+        raise AssertionError("Fee of %s BPQ too high! (Should be %s BPQ)" % (str(fee), str(target_fee)))
 
 def assert_equal(thing1, thing2, *args):
     if thing1 != thing2 or any(thing1 != arg for arg in args):
@@ -172,7 +172,7 @@ def assert_array_result(object_array, to_match, expected, should_not_find=False)
 ###################
 
 def check_json_precision():
-    """Make sure json library being used does not lose precision converting BTC values"""
+    """Make sure json library being used does not lose precision converting BPQ values"""
     n = Decimal("20000000.00000003")
     satoshis = int(json.loads(json.dumps(float(n))) * 1.0e8)
     if satoshis != 2000000000000003:
@@ -287,7 +287,7 @@ def initialize_datadir(dirname, n):
     datadir = os.path.join(dirname, "node" + str(n))
     if not os.path.isdir(datadir):
         os.makedirs(datadir)
-    with open(os.path.join(datadir, "bitcoin.conf"), 'w', encoding='utf8') as f:
+    with open(os.path.join(datadir, "bpq.conf"), 'w', encoding='utf8') as f:
         f.write("regtest=1\n")
         f.write("port=" + str(p2p_port(n)) + "\n")
         f.write("rpcport=" + str(rpc_port(n)) + "\n")
@@ -300,8 +300,8 @@ def get_datadir_path(dirname, n):
 def get_auth_cookie(datadir):
     user = None
     password = None
-    if os.path.isfile(os.path.join(datadir, "bitcoin.conf")):
-        with open(os.path.join(datadir, "bitcoin.conf"), 'r', encoding='utf8') as f:
+    if os.path.isfile(os.path.join(datadir, "bpq.conf")):
+        with open(os.path.join(datadir, "bpq.conf"), 'r', encoding='utf8') as f:
             for line in f:
                 if line.startswith("rpcuser="):
                     assert user is None  # Ensure that there is only one rpcuser line
@@ -319,11 +319,8 @@ def get_auth_cookie(datadir):
         raise ValueError("No RPC credentials")
     return user, password
 
-# If a cookie file exists in the given datadir, delete it.
-def delete_cookie_file(datadir):
-    if os.path.isfile(os.path.join(datadir, "regtest", ".cookie")):
-        logger.debug("Deleting leftover cookie file")
-        os.remove(os.path.join(datadir, "regtest", ".cookie"))
+def log_filename(dirname, n_node, logname):
+    return os.path.join(dirname, "node" + str(n_node), "regtest", logname)
 
 def get_bip9_status(node, key):
     info = node.getblockchaininfo()
@@ -335,24 +332,22 @@ def set_node_times(nodes, t):
 
 def disconnect_nodes(from_connection, node_num):
     for peer_id in [peer['id'] for peer in from_connection.getpeerinfo() if "testnode%d" % node_num in peer['subver']]:
-        try:
-            from_connection.disconnectnode(nodeid=peer_id)
-        except JSONRPCException as e:
-            # If this node is disconnected between calculating the peer id
-            # and issuing the disconnect, don't worry about it.
-            # This avoids a race condition if we're mass-disconnecting peers.
-            if e.error['code'] != -29: # RPC_CLIENT_NODE_NOT_CONNECTED
-                raise
+        from_connection.disconnectnode(nodeid=peer_id)
 
-    # wait to disconnect
-    wait_until(lambda: [peer['id'] for peer in from_connection.getpeerinfo() if "testnode%d" % node_num in peer['subver']] == [], timeout=5)
+    for _ in range(50):
+        if [peer['id'] for peer in from_connection.getpeerinfo() if "testnode%d" % node_num in peer['subver']] == []:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError("timed out waiting for disconnect")
 
 def connect_nodes(from_connection, node_num):
     ip_port = "127.0.0.1:" + str(p2p_port(node_num))
     from_connection.addnode(ip_port, "onetry")
     # poll until version handshake complete to avoid race conditions
     # with transaction relaying
-    wait_until(lambda:  all(peer['version'] != 0 for peer in from_connection.getpeerinfo()))
+    while any(peer['version'] == 0 for peer in from_connection.getpeerinfo()):
+        time.sleep(0.1)
 
 def connect_nodes_bi(nodes, a, b):
     connect_nodes(nodes[a], b)
