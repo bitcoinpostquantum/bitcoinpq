@@ -3290,28 +3290,6 @@ static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, c
         nHeight < consensusParams.BPQHeight + consensusParams.BPQPremineWindow &&
         consensusParams.BPQPremineEnforceWhitelist)
     {
-        //if (block.vtx[0]->vout.size() != 1) {
-        //    return state.DoS(
-        //        100, error("%s: only one coinbase output is allowed",__func__),
-        //       REJECT_INVALID, "bad-premine-coinbase-output");
-        //}
-
-        /*
-        for (unsigned int i = 0; i < block.vtx[0]->vout.size(); ++i)
-        {
-            const CTxOut& output = block.vtx[0]->vout[i];
-            if (output.nValue == 0 && output.scriptPubKey.size()==38)
-                continue; // skip commitment
-            
-            bool valid = Params().IsPremineAddressScript(output.scriptPubKey, (uint32_t)nHeight);
-            if (!valid) {
-                return state.DoS(
-                    100, error("%s: not in premine whitelist", __func__),
-                    REJECT_INVALID, "bad-premine-coinbase-scriptpubkey");
-            }
-        }
-        */
-
         if (block.vtx[0]->vout.size() != 1) {
             return state.DoS(
                 100, error("%s: only one coinbase output is allowed",__func__),

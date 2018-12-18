@@ -276,7 +276,7 @@ public:
 
         consensus.BPQHeight = 1445550;
         consensus.BPQPremineWindow = 48;
-        consensus.BPQPremineEnforceWhitelist = true;
+        consensus.BPQPremineEnforceWhitelist = false;
         consensus.nSolutionSize = EquihashSolutionWidth();
 
         /* Bitcoin testnet */
@@ -480,7 +480,7 @@ void UpdateVersionBitsParameters(Consensus::DeploymentPos d, int64_t nStartTime,
 
 static CScript CltvMultiSigScript(const std::vector<std::string>& pubkeys, uint32_t lock_time)
 {
-    // generate 2-in-4 multisig locking script
+    // generate 3-of-3 multisig locking script
     
     CScript redeem_script;
     if (lock_time > 0) {
@@ -490,7 +490,7 @@ static CScript CltvMultiSigScript(const std::vector<std::string>& pubkeys, uint3
     for (const std::string& pubkey : pubkeys) {
         redeem_script << ToByteVector(ParseHex(pubkey));
     }
-    redeem_script << OP_4 << OP_CHECKMULTISIG;
+    redeem_script << OP_3 << OP_CHECKMULTISIG;
     return redeem_script;
 }
 
