@@ -3093,19 +3093,17 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
                                  strprintf("Transaction check failed (tx hash %s) %s", tx->GetHash().ToString(), state.GetDebugMessage()));
 
     // Check BPQ transactions
-    /*
-    if (block.nHeight >= consensusParams.BPQHeight)
+    if (block.nMajorVersion > CBlock::BITCOIN_MAJOR_VERSION)
     {
         for (const auto& ptx : block.vtx)
         {
             if (!IsTransactionBPQ(*ptx))
             {
-                LogPrintf("Transaction check failed, block: %d, tx: %s, %s\n", block.nHeight, ptx->GetHash().ToString(), "non-BPQ output");
+                LogPrintf("Transaction check failed (tx hash %s) %s\n", ptx->GetHash().ToString(), "non-BPQ output");
                 return state.DoS(100, false, REJECT_INVALID, "bad-tx-output", false, "non-BPQ output");
             };
         }
     }
-    */
     
     unsigned int nSigOps = 0;
     for (const auto& tx : block.vtx)
