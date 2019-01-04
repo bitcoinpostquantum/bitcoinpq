@@ -35,16 +35,6 @@ If you have **Ubuntu 17.10** and higher
 ```bash
 sudo apt-get install --assume-yes libsodium-dev
 ```
-If you have **Ubuntu 16.04** and early
-```bash
-wget https://download.libsodium.org/libsodium/releases/libsodium-1.0.13.tar.gz
-tar -xzvf libsodium-1.0.13.tar.gz
-cd libsodium-1.0.13/
-./configure
-make && make check
-sudo make install && cd ..
-```
-
 ##### Install Botan-2.7.0 
 ```bash
 wget https://botan.randombit.net/releases/Botan-2.7.0.tgz
