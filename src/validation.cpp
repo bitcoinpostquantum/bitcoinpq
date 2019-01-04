@@ -1843,7 +1843,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     // is enforced in ContextualCheckBlockHeader(); we wouldn't want to
     // re-enforce that rule here (at least until we make it impossible for
     // GetAdjustedTime() to go backward).
-    if (!CheckBlock(block, state, chainparams.GetConsensus(), !fJustCheck, !fJustCheck))
+    if (!CheckBlock(block, state, chainparams.GetConsensus(), !fJustCheck, !fJustCheck, !fJustCheck))
         return error("%s: Consensus::CheckBlock: %s", __func__, FormatStateMessage(state));
 
     // verify that the view's current state corresponds to the previous block
@@ -3035,7 +3035,7 @@ static bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state,
 }
 
 
-bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW, bool fCheckMerkleRoot)
+bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckBPQTx)
 {
     // These are checks that are independent of context.
 
@@ -3093,15 +3093,17 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
                                  strprintf("Transaction check failed (tx hash %s) %s", tx->GetHash().ToString(), state.GetDebugMessage()));
 
     // Check BPQ transactions
-    if (block.nMajorVersion > CBlock::BITCOIN_MAJOR_VERSION)
-    {
-        for (const auto& ptx : block.vtx)
+    if (fCheckBPQTx) {
+        if (block.nMajorVersion > CBlock::BITCOIN_MAJOR_VERSION)
         {
-            if (!IsTransactionBPQ(*ptx))
+            for (const auto& ptx : block.vtx)
             {
-                LogPrintf("Transaction check failed (tx hash %s) %s\n", ptx->GetHash().ToString(), "non-BPQ output");
-                return state.DoS(100, false, REJECT_INVALID, "bad-tx-output", false, "non-BPQ output");
-            };
+                if (!IsTransactionBPQ(*ptx))
+                {
+                    LogPrintf("Transaction check failed (tx hash %s) %s\n", ptx->GetHash().ToString(), "non-BPQ output");
+                    return state.DoS(100, false, REJECT_INVALID, "bad-tx-output", false, "non-BPQ output");
+                }
+            }
         }
     }
     
@@ -3588,7 +3590,7 @@ bool ProcessNewBlock(const CChainParams& chainparams, const std::shared_ptr<cons
     return true;
 }
 
-bool TestBlockValidity(CValidationState& state, const CChainParams& chainparams, const CBlock& block, CBlockIndex* pindexPrev, bool fCheckPOW, bool fCheckMerkleRoot)
+bool TestBlockValidity(CValidationState& state, const CChainParams& chainparams, const CBlock& block, CBlockIndex* pindexPrev, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckBPQTx)
 {
     AssertLockHeld(cs_main);
     assert(pindexPrev && pindexPrev == chainActive.Tip());
@@ -3602,7 +3604,7 @@ bool TestBlockValidity(CValidationState& state, const CChainParams& chainparams,
         return error("%s: Consensus::ContextualCheckBlockHeader: %s", __func__, FormatStateMessage(state));
     //if (!ContextualCheckBlockHeader(block, state, pindexPrev, fCheckPOW))
     //       return false;    
-    if (!CheckBlock(block, state, chainparams.GetConsensus(), fCheckPOW, fCheckMerkleRoot))
+    if (!CheckBlock(block, state, chainparams.GetConsensus(), fCheckPOW, fCheckMerkleRoot, fCheckBPQTx))
         return error("%s: Consensus::CheckBlock: %s", __func__, FormatStateMessage(state));
     if (!ContextualCheckBlock(block, state, chainparams.GetConsensus(), pindexPrev))
         return error("%s: Consensus::ContextualCheckBlock: %s", __func__, FormatStateMessage(state));
